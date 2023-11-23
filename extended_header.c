@@ -19,6 +19,7 @@ int add_extended_header(struct sk_buff *skb) {
     short payload_len;
 
     // 复制备份原IPv6基本报头然后将其移除
+    pskb_expand_head(skb, IPV6_HEADER_LEN, 0, GFP_ATOMATIC)
     memcpy(&ipv6_header, skb->data, IPV6_HEADER_LEN);
     skb_pull(skb, IPV6_HEADER_LEN);
 
@@ -37,6 +38,7 @@ int add_extended_header(struct sk_buff *skb) {
     memcpy(skb_push(skb, IPV6_HEADER_LEN), &ipv6_header, sizeof(struct ipv6hdr));
     // skb->network_header -= sizeof(struct my_extension_header);
     skb_reset_network_header(skb);
+    skb_reset_mac_header(skb);
     
     return 0;
 }
@@ -66,6 +68,7 @@ int remove_extended_header(struct sk_buff *skb) {
     memcpy(skb_push(skb, IPV6_HEADER_LEN), &ipv6_header, sizeof(struct ipv6hdr));
     // skb->network_header += sizeof(struct my_extension_header);
     skb_reset_network_header(skb);
+    skb_reset_mac_header(skb);
 
     // debug_print_packet(skb);
     
