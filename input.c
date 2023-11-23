@@ -1,7 +1,17 @@
 #include "input.h"
 
+static void set_ether(struct sk_buff *skb) {
+    struct ethhdr *eth = eth_hdr(skb);
+    if(NULL != skb->dev && NULL != skb->dev->dev_addr) {
+        memcpy(eth->h_dest, skb->dev->dev_addr, 6);
+    }
+
+    skb->pkt_type = PACKET_HOST;
+}
+
 unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
     remove_extended_header(skb);
+    set_ether(skb);
 
     return NF_ACCEPT;
 }
