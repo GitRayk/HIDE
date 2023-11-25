@@ -19,7 +19,7 @@ int add_extended_header(struct sk_buff *skb) {
     short payload_len;
 
     // 复制备份原IPv6基本报头然后将其移除
-    pskb_expand_head(skb, IPV6_HEADER_LEN, 0, GFP_ATOMIC);
+    pskb_expand_head(skb, sizeof(struct my_extension_header), 0, GFP_ATOMIC);
     memcpy(&ipv6_header, skb->data, IPV6_HEADER_LEN);
     skb_pull(skb, IPV6_HEADER_LEN);
 

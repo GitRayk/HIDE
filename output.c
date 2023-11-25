@@ -3,12 +3,16 @@
 static void set_ether(struct sk_buff *skb) {
     unsigned char hw[6];
     memset(hw, 0xFF, 6);
-    eth_header(skb, skb->dev, ETH_P_IP, hw, NULL, 0);
+    eth_header(skb, skb->dev, ETH_P_IPV6, hw, NULL, 0);
 }
 
 unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    //struct ipv6
+    // struct icmp6hdr *icmpv6h = icmp6_hdr(skb);
+    //printk("icmp
     add_extended_header(skb);
     set_ether(skb);
+    
     dev_queue_xmit(skb);
 
     return NF_STOLEN;
