@@ -15,16 +15,19 @@ static void set_ether(struct sk_buff *skb) {
 
 unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
     char *char_addr = NULL;
-    int sn;
+    unsigned int time_stamp; 
+    unsigned int sn;        // sn 好像也是一个由用户空间下发的参数？
     char encrypt_addr[ENCRYPT_SIZE] = {0};
-
-    add_extended_header(skb);
 
     // 对 IPv6 地址进行加密
     get_random_bytes(&sn, sizeof(sn));
-    aes_encrypt((char*)&AID, (char*)&sn, aes_key, encrypt_addr);
+    time_stamp = (unsigned int)ktime_get();
+    aes_encrypt((char*)&AID, (char*)&time_stamp, (char*)&sn, aes_key, encrypt_addr);
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);
+
+    // 添加扩展报头，需要加密时使用的 ts、sn 和加密结果中的 eea
+    add_extended_header(skb, time_stamp, sn, encrypt_addr + 8);
 
     // 设置以太头并发送到网络设备队列
     set_ether(skb);

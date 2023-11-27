@@ -18,16 +18,15 @@ void aes_exit(void) {
 }
 
 // 将指定信息拼接并进行AES加密，加密结果保存在 target 指向的地址当中
-int aes_encrypt(const char* aid, const char* sn, const char* aes_key, char* target) {
+int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes_key, char* target) {
     char plaintext[ENCRYPT_SIZE] = {0};
-    int time_stamp = (int)ktime_get(); 
     char decrypt_text[ENCRYPT_SIZE] = {0};
 
     s64 start_time = ktime_to_ns(ktime_get());
     
     // 拼接 AID、TS、SN
     memcpy(plaintext, aid, 8);
-    memcpy(plaintext + 8, (char*)&time_stamp, 4);
+    memcpy(plaintext + 8,  ts, 4);
     memcpy(plaintext + 12, sn, 4);
 
     s64 copy_time = ktime_to_ns(ktime_get());
