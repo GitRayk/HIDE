@@ -4,6 +4,7 @@
 #include "output.h"
 #include "input.h"
 #include "kern_aes.h"
+#include "kern_ioctl.h"
 
 
 static int __init my_module_init(void) {
@@ -11,6 +12,7 @@ static int __init my_module_init(void) {
     input_init();
     output_init();
     aes_init();
+    ioctl_init();
 
     pr_info("Extended module loaded\n");
     return 0;
@@ -21,6 +23,7 @@ static void __exit my_module_exit(void) {
     input_exit();
     output_exit();
     aes_exit();
+    ioctl_exit();
 
     pr_info("Extended module unloaded\n");
 }
