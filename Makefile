@@ -1,5 +1,5 @@
 obj-m := extended.o
-extended-objs := main.o output.o input.o extended_header.o
+extended-objs := main.o output.o input.o extended_header.o kern_aes.o
 
 EXTRA_CFLAGS += -Wall -I$(src)/include/
 

@@ -3,12 +3,14 @@
 
 #include "output.h"
 #include "input.h"
+#include "kern_aes.h"
 
 
 static int __init my_module_init(void) {
     // 设置Netfilter钩子函数
     input_init();
     output_init();
+    aes_init();
 
     pr_info("Extended module loaded\n");
     return 0;
@@ -18,6 +20,7 @@ static void __exit my_module_exit(void) {
     // 注销Netfilter钩子函数
     input_exit();
     output_exit();
+    aes_exit();
 
     pr_info("Extended module unloaded\n");
 }
