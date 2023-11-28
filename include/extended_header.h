@@ -10,7 +10,7 @@
 
 // 自定义扩展报头结构
 #pragma pack(1)
-typedef struct label_header {
+typedef struct __label_header {
     __u8 next_header;
     __u16 length;
     __u8 reserved;

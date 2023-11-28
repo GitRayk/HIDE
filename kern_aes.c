@@ -51,7 +51,8 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
     if(strncmp(plaintext, decrypt_text, ENCRYPT_SIZE) != 0)
         printk("Decrypt error");
 
-    printk("////////////////");
+    printk("//////////////// debug:");
+    printk("sn: %d, aid: %s, aes_key: %s", *sn, aid, aes_key);
     printk("copy_time: %lld ns", copy_time - start_time);
     printk("setkey_time: %lld ns", setkey_time - copy_time);
     printk("encrypt_time: %lld ns", encrypt_time - setkey_time);
