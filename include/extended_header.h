@@ -3,9 +3,12 @@
 #include <linux/ipv6.h>
 #include <linux/icmpv6.h>
 
+#include "kern_hash.h"
+
 #ifndef IPPROTO_LABEL
 #define IPPROTO_LABEL 253
 #define ETH_ADDRESS_LEN 6
+#define IPV6_ADDRESS_LEN 16
 #define IPV6_HEADER_LEN 40
 
 // 自定义扩展报头结构
@@ -17,11 +20,12 @@ typedef struct __label_header {
     __u32 timestamp;
     __u32 sequence;
     __u8 eea[8];
-    // 这是基本结构，后续还需要在这个扩展报头后面加一个变长的 IPC (Identity Protection Code)（为什么是变长的？）
+    __u8 IPC[32];
+    // 本 demo 中使用 aes 加密、sha256 作哈希，故 eea 长为 64位，IPC 长为 256 位
 } LABEL_HEADER;
 #pragma pack()
 #endif
 
-int add_extended_header(struct sk_buff *skb, unsigned int ts, unsigned sn, const unsigned char *eea);
+int add_extended_header(struct sk_buff *skb, u_int64_t AID, unsigned int ts, unsigned sn, const unsigned char *eea);
 int remove_extended_header(struct sk_buff *skb);
 

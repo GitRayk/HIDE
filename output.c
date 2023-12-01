@@ -20,14 +20,15 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     get_sn(&sn);
     get_aes_key(aes_key);
 
-    // 对 IPv6 地址进行加密
+    // 获取 IID || EEA
     time_stamp = (unsigned int)ktime_get();
     aes_encrypt((char*)&AID, (char*)&time_stamp, (char*)&sn, aes_key, encrypt_addr);
+     // 修改 IPv6 源地址，必须得在添加扩展报头之前修改，因为扩展报头中的 IPC 依赖修改后的 IP 地址
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);
 
     // 添加扩展报头，需要加密时使用的 ts、sn 和加密结果中的 eea
-    add_extended_header(skb, time_stamp, sn, encrypt_addr + 8);
+    add_extended_header(skb, AID, time_stamp, sn, encrypt_addr + 8);
 
     // 设置以太头并发送到网络设备队列
     set_ether(skb);
