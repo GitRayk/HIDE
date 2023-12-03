@@ -7,10 +7,21 @@
 #define CMD_DEV_PATH "/dev/labelCmd"
 
 enum  CMD_TYPE {
-    IOCTL_SET_AID = 1,
-    IOCTL_SET_SN,
-    IOCTL_SET_AES_KEY
+    IOCTL_SET_AES_KEY = 1,      // IOCTL_SET_AES_KEY 表示负载是不属于本机的终端信息，内核需要存储在哈希表中
+    IOCTL_SET_MYSELF                // IOCTL_SET_MYSELF    表示负载是本机的终端信息
 };
+
+typedef struct __set_key_mes {
+    unsigned int sn;
+    char mac[6];
+    char aes_key[16];
+} SET_KEY_MES;
+
+typedef struct __set_myself_mes {
+    unsigned int sn;
+    char aes_key[16];
+    char aid[8];
+} SET_MYSELF_MES;
 
 // 用户空间和内核模块交互的信息格式
 typedef struct __ioctl_cmd {

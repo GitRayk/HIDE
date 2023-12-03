@@ -60,3 +60,19 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
 
     return 0;
 }
+
+int aes_decrypt(const char *aes_key, const char *IID, const char *EEA, char *target) {
+    char decrypt_text[ENCRYPT_SIZE] = {0};
+    memcpy(decrypt_text, IID, 8);
+    memcpy(decrypt_text, EEA, 8);
+
+    // 加载加解密时所需要使用的密钥
+    if(crypto_cipher_setkey(tfm, aes_key, ENCRYPT_SIZE)) {
+        printk(KERN_ERR "Failed to set AES key\n");
+        crypto_free_cipher(tfm);
+        return -1;
+    }
+
+    crypto_cipher_decrypt_one(tfm, decrypt_text, target);
+    return 0;
+}

@@ -2,6 +2,7 @@
 #include <linux/uaccess.h>
 
 #include "ioctl_cmd.h"
+#include "hash_table.h"
 
 int ioctl_init(void);
 void ioctl_exit(void);

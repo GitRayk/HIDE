@@ -2,6 +2,7 @@
 #include <linux/netfilter_ipv6.h>
 
 #include "extended_header.h"
+#include "hash_table.h"
 #include "kern_aes.h"
 
 int input_init(void);

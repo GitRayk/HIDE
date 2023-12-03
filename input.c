@@ -10,9 +10,31 @@ static void set_ether(struct sk_buff *skb) {
 }
 
 unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
-    remove_extended_header(skb);
-    set_ether(skb);
+    // 接受端接受到数据后，首先根据数据包的 mac 地址查询使用的加密密钥，然后对 IID || EEA 解密得到 AID
+    // 然后再根据这个 AID 及其他信息去验证 IPC 是否正确，正确则放行数据包
+    struct ethhdr *eth_header = eth_hdr(skb);
+    LABEL_HEADER *label_hdr = NULL;
+    const TERMINAL_INFO *tinfo = NULL; 
+    char *char_addr = NULL;
+    char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
 
+    tinfo = find_terminal_of_mac(eth_header->h_source);
+    if(tinfo == NULL)
+        return NF_DROP;     // 如果查不到对应的密钥，直接丢弃数据包
+
+    label_hdr = skb_label_header(skb);
+    if(label_hdr != NULL) {
+        char_addr = (char*)&(ipv6_hdr(skb)->saddr);
+        aes_decrypt(tinfo->encrypt_key, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
+
+        if (remove_extended_header(skb, plaintext) == -1)
+            return NF_DROP;
+        
+        set_ether(skb);
+        return NF_ACCEPT;
+    }
+
+    // 当没有使用地址标签的系统时，数据包正常放行？还是丢弃？
     return NF_ACCEPT;
 }
 

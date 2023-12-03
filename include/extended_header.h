@@ -26,6 +26,9 @@ typedef struct __label_header {
 #pragma pack()
 #endif
 
-int add_extended_header(struct sk_buff *skb, u_int64_t AID, unsigned int ts, unsigned sn, const unsigned char *eea);
-int remove_extended_header(struct sk_buff *skb);
+// 返回 skb 中的地址标签扩展报头，当此报头不存在时返回 NULL
+LABEL_HEADER *skb_label_header(struct sk_buff *skb);
+
+int add_extended_header(struct sk_buff *skb, const char *AID, unsigned int ts, unsigned sn, const unsigned char *eea);
+int remove_extended_header(struct sk_buff *skb, const char *AID);
 
