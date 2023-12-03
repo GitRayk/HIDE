@@ -52,7 +52,7 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
         printk("Decrypt error");
 
     printk("//////////////// debug:");
-    printk("sn: %d, aid: %s, aes_key: %s", *sn, aid, aes_key);
+    printk("sn: %d", *sn);
     printk("copy_time: %lld ns", copy_time - start_time);
     printk("setkey_time: %lld ns", setkey_time - copy_time);
     printk("encrypt_time: %lld ns", encrypt_time - setkey_time);
@@ -64,7 +64,7 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
 int aes_decrypt(const char *aes_key, const char *IID, const char *EEA, char *target) {
     char decrypt_text[ENCRYPT_SIZE] = {0};
     memcpy(decrypt_text, IID, 8);
-    memcpy(decrypt_text, EEA, 8);
+    memcpy(decrypt_text + 8, EEA, 8);
 
     // 加载加解密时所需要使用的密钥
     if(crypto_cipher_setkey(tfm, aes_key, ENCRYPT_SIZE)) {
@@ -73,6 +73,6 @@ int aes_decrypt(const char *aes_key, const char *IID, const char *EEA, char *tar
         return -1;
     }
 
-    crypto_cipher_decrypt_one(tfm, decrypt_text, target);
+    crypto_cipher_decrypt_one(tfm, target, decrypt_text);
     return 0;
 }

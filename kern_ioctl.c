@@ -79,8 +79,8 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
     else if (iocmd.type == IOCTL_SET_MYSELF) {
         copy_from_user((char*)&myself_buff, (char*)iocmd.buff, sizeof(SET_MYSELF_MES));
         __sn = myself_buff.sn;
-        strncpy(__aes_key, myself_buff.aes_key, 16);
-        strncpy(__AID, myself_buff.aid, 8);
+        memcpy(__aes_key, myself_buff.aes_key, 16);
+        memcpy(__AID, myself_buff.aid, 8);
     }
     else {
         printk("Error ioctl type: %d", iocmd.type);
@@ -91,13 +91,13 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
 
 // aid、sn、aes_key 只能通过 getter 来获取，防止被其他模块修改
 void get_aid(void *aid) {
-    strncpy((char*)aid, (char*)__AID, 8);
+    memcpy((char*)aid, (char*)__AID, 8);
 }
 
 void get_sn(void *sequence) {
-    strncpy((char*)sequence, (char*)&__sn, sizeof(__sn));
+    memcpy((char*)sequence, (char*)&__sn, sizeof(__sn));
 }
 
 void get_aes_key(void *key) {
-    strncpy((char*)key, (char*)__aes_key, 16);
+    memcpy((char*)key, (char*)__aes_key, 16);
 }

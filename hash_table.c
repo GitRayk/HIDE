@@ -4,8 +4,8 @@ DEFINE_HASHTABLE(terminal_info_hashtable, HASHTABLE_SIZE);
 
 int insert_terminal_info(const char *mac, const char *encrypt_key, unsigned int sn) {
     TERMINAL_INFO *tinfo = kmalloc(sizeof(TERMINAL_INFO), GFP_KERNEL);
-    strncpy(tinfo->mac, mac, HASH_KEY_LENGTH);
-    strncpy(tinfo->encrypt_key, encrypt_key, 16);
+    memcpy(tinfo->mac, mac, HASH_KEY_LENGTH);
+    memcpy(tinfo->encrypt_key, encrypt_key, 16);
     tinfo->sn = sn;
     
     // 由于 hash_add 并不会检查是否已经有 key 对应的表项，以防调用 insert 时造成覆盖，这里作一次检查，使功能与 update 区分开
@@ -20,7 +20,7 @@ int insert_terminal_info(const char *mac, const char *encrypt_key, unsigned int 
 int update_terminal_info(const char *mac, const char *encrypt_key, unsigned int sn) {
     TERMINAL_INFO *tinfo = NULL;
     hash_for_each_possible(terminal_info_hashtable, tinfo, hnode, jhash(mac, HASH_KEY_LENGTH, 0)) {
-        strncpy(tinfo->encrypt_key, encrypt_key, 16);
+        memcpy(tinfo->encrypt_key, encrypt_key, 16);
         tinfo->sn = sn;
         return 0;
     }

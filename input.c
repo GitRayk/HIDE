@@ -19,8 +19,13 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
 
     tinfo = find_terminal_of_mac(eth_header->h_source);
-    if(tinfo == NULL)
+    if(tinfo == NULL) {
+        printk(KERN_INFO "Can't find any aes key of Source MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+               eth_header->h_source[0], eth_header->h_source[1],
+               eth_header->h_source[2], eth_header->h_source[3],
+               eth_header->h_source[4], eth_header->h_source[5]);
         return NF_DROP;     // 如果查不到对应的密钥，直接丢弃数据包
+    }
 
     label_hdr = skb_label_header(skb);
     if(label_hdr != NULL) {

@@ -79,8 +79,8 @@ int add_extended_header(struct sk_buff *skb, const char *AID, unsigned int ts, u
     extended_header->length = htons(sizeof(LABEL_HEADER));
     extended_header->timestamp = ts;
     extended_header->sequence = sn;
-    strncpy(extended_header->eea, eea, 8);
-    strncpy(extended_header->IPC, IPC, get_digest_size());
+    memcpy(extended_header->eea, eea, 8);
+    memcpy(extended_header->IPC, IPC, get_digest_size());
 
     kfree(IPC);
     IPC = NULL;
@@ -103,18 +103,22 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     struct ipv6hdr ipv6_header;
     LABEL_HEADER *extended_header = NULL;
     short payload_len;
-    unsigned char IPC[32];
+    char *IPC = NULL;
     skb->transport_header += sizeof(LABEL_HEADER);
 
     // 验证 IPC
+    IPC = kmalloc(get_digest_size(), GFP_KERNEL);
     extended_header = skb_label_header(skb);
     if(extended_header != NULL) {
         get_ipc(skb, AID, extended_header->eea, 8, extended_header->timestamp, extended_header->sequence, IPC);
-        if(strcmp(IPC, extended_header->IPC) != 0)  {
+        if(strncmp(IPC, extended_header->IPC, get_digest_size()) != 0)  {
             printk("IPC error");
+            kfree(IPC);
             return -1;
         }
     }
+    kfree(IPC);
+    IPC = NULL;
 
     // 复制备份原IPv6基本报头
     memcpy(&ipv6_header, skb->data, IPV6_HEADER_LEN);
@@ -137,6 +141,14 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     // skb->network_header += sizeof(LABEL_HEADER);
     skb_reset_network_header(skb);
 
+    // 下面这一段是作弊码
+    // 如果不把接受的报文的源 IP 地址改回真实的源 IP，是没法通过传输层校验和的（伪首部）
+    char ipv6src[16] = {0x20, 0x23, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x02};
+    char *char_addr = (char*)&(ipv6_hdr(skb)->saddr);
+    memcpy(char_addr, ipv6src, 16);
     // debug_print_packet(skb);
     
     return IPPROTO_LABEL;
