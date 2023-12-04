@@ -141,15 +141,5 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     // skb->network_header += sizeof(LABEL_HEADER);
     skb_reset_network_header(skb);
 
-    // 下面这一段是作弊码
-    // 如果不把接受的报文的源 IP 地址改回真实的源 IP，是没法通过传输层校验和的（伪首部）
-    char ipv6src[16] = {0x20, 0x23, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x02};
-    char *char_addr = (char*)&(ipv6_hdr(skb)->saddr);
-    memcpy(char_addr, ipv6src, 16);
-    // debug_print_packet(skb);
-    
     return IPPROTO_LABEL;
 }
