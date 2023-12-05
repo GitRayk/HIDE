@@ -17,8 +17,7 @@ static void get_ipc(struct sk_buff *skb,  const char *AID, const char* EEA, unsi
     char *transport_hash = NULL;
     char *hash_plaintext = NULL;
     unsigned int plaintext_len = IPV6_ADDRESS_LEN+ IPV6_ADDRESS_LEN + 8 + eea_len + sizeof(ts) + sizeof(sn) + get_digest_size();
-    char *plaintext_buff = NULL;    // 用于拼接
-
+    char *plaintext_buff = NULL;    // 用于指示当前的拼接位置
     // 将 (源IP || 目的 IP || AID  || EEA || TS || SN || Hash(传输层)) 进行一次哈希得到扩展报头中的 IPC 字段
     // 所以，这里目的端要怎么获取源设备的 AID 呢？AID 的获取有两种方法，一种是提前由用户态的程序和密钥一起下发，另一种是先对 IID || EEA 进行解密来获得。（有点怪我感觉
     // 如果是解密得到的，那解密之前需要知道这个数据包加密所使用的密钥，所以应该有 MAC - 密钥 的映射关系
