@@ -14,4 +14,3 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
 
 void get_aid(void *aid);
 void get_sn(void *sequence);
-void get_aes_key(void *key);

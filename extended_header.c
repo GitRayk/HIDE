@@ -1,6 +1,6 @@
 #include "extended_header.h"
 
-static void debug_print_packet(const struct sk_buff *skb) {
+void debug_print_packet(const struct sk_buff *skb) {
     unsigned char *byte = skb->data;
     int i = skb->len;
     printk("####################");

@@ -38,14 +38,52 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     char *char_addr = NULL;
     char encrypt_addr[ENCRYPT_SIZE] = {0};
     char AID[8];
-    unsigned int sn;
+    unsigned int sn, time_stamp;
     char aes_key[16];
-    unsigned int time_stamp; 
+    struct in6_addr net_device_ip, saddr, daddr;
+    struct net_device *dev;
+    const TERMINAL_AID_INFO *aid_info = NULL;
+    const TERMINAL_ENCRYPT_INFO *encrypt_info = NULL;
+    struct neighbour *neigh = NULL;
 
+    s64 start_time = ktime_to_ns(ktime_get());
     //  发送端发送时从 kern_ioctl 模块查询自己加密信息
-    get_aid(AID);
-    get_sn(&sn);
-    get_aes_key(aes_key);
+    // 通过比较源IP判断数据包是否是自己发送的，如果是，则从 kern_ioctl 模块；如果不是，则查找对应IP的AID
+    dev = state->out;
+    daddr = ipv6_hdr(skb)->daddr;
+    saddr = ipv6_hdr(skb)->saddr;
+    if (ipv6_dev_get_saddr(&init_net, dev, &daddr, 0, &net_device_ip) != 0) {
+        printk("Can't find net device [%s]ipv6 to %pI6", dev->name, &daddr);
+        return NF_DROP;
+    }
+
+    if(memcmp(&saddr, &net_device_ip, IPV6_ADDRESS_LEN) == 0) {
+        get_aid(AID);
+        get_sn(&sn);
+    }
+    else {
+        aid_info = find_terminal_of_ip6((char*)&saddr);
+        if(aid_info == NULL) {
+            printk("Can't get aid of ipv6: %pI6", &saddr);
+            return NF_DROP;
+        }
+        memcpy(AID, aid_info->aid, 8);
+        sn=aid_info->sn;
+    }
+
+    // 由于数据包要由下一跳，所以使用的本机与下一跳之间的对称密钥。即由下一跳mac映射密钥，由于钩子函数在网络层，所以通过邻居表找到目的IP的下一跳mac
+    neigh = neigh_lookup(&nd_tbl, &daddr, dev);
+    if (neigh) {
+        encrypt_info = find_terminal_of_mac(neigh->ha);
+        if(encrypt_info == NULL) {
+            printk("Can't get encryption info of mac: %pM", neigh->ha);
+            return NF_DROP;
+        }
+        memcpy(aes_key, encrypt_info->encrypt_key, 16);
+    } else {
+        printk("Cann't get mac of ipv6: %pI6", &daddr);
+        return NF_DROP;
+    }
 
     // 获取 IID || EEA
     time_stamp = (unsigned int)ktime_get();
@@ -54,19 +92,22 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);
 
-    // 由于修改了源地址，所以需要重新计算上层校验和
-    if(csum_calculate(skb) == -1)
-        return NF_DROP;
+    // 由于修改了源地址，所以需要重新计算上层校验和（现在由于每一跳都恢复了IP地址，所以不需要重新计算传输层校验和
+    //if(csum_calculate(skb) == -1)
+    //    return NF_DROP;
 
     // 添加扩展报头，需要加密时使用的 ts、sn 和加密结果中的 eea
     add_extended_header(skb, AID, time_stamp, sn, encrypt_addr + 8);
 
     // 设置以太头并发送到网络设备队列
-    set_ether(skb);
+    // set_ether(skb);
     
-    dev_queue_xmit(skb);
+    // dev_queue_xmit(skb);
 
-    return NF_STOLEN;
+    // return NF_STOLEN;
+    s64 end_time = ktime_to_ns(ktime_get());
+    printk("hook function total time: %lld\n", end_time - start_time);
+    return NF_ACCEPT;
 }
 
 static struct nf_hook_ops nfho = {

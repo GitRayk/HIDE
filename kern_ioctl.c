@@ -3,7 +3,6 @@
 // 这些数据是本终端的信息
 static char __AID[8];
 static unsigned int __sn;
-static char __aes_key[16];
 
 static int cmd_major = CMD_MAJOR;
 
@@ -42,7 +41,6 @@ int ioctl_init(void) {
 
     memset(__AID, 0, 8);
     __sn = 0;
-    memset(__aes_key, 0, 16);
 
     ret = register_chrdev(cmd_major, CMD_DEV_NAME, &fops);
     if(ret < 0) return ret;
@@ -72,14 +70,23 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
     if(iocmd.type == IOCTL_SET_AES_KEY) {
         copy_from_user((char*)&buff, (char*)iocmd.buff, sizeof(SET_KEY_MES));
         if(find_terminal_of_mac(buff.mac) == NULL)
-            insert_terminal_info(buff.mac, buff.aes_key, buff.sn);
+            insert_terminal_encrypt_info(buff.mac, buff.aes_key, buff.sn);
         else
-            update_terminal_info(buff.mac, buff.aes_key, buff.sn);
+            update_terminal_encrypt_info(buff.mac, buff.aes_key, buff.sn);
+
+        if(find_terminal_of_aid(buff.aid) == NULL)
+            insert_terminal_ip_info(buff.aid, buff.ip6);
+        else
+            update_terminal_ip_info(buff.aid, buff.ip6);
+
+        if(find_terminal_of_ip6(buff.ip6) == NULL)
+            insert_terminal_aid_info(buff.ip6, buff.aid, buff.sn);
+        else
+            update_terminal_aid_info(buff.ip6, buff.aid, buff.sn);
     }
     else if (iocmd.type == IOCTL_SET_MYSELF) {
         copy_from_user((char*)&myself_buff, (char*)iocmd.buff, sizeof(SET_MYSELF_MES));
         __sn = myself_buff.sn;
-        memcpy(__aes_key, myself_buff.aes_key, 16);
         memcpy(__AID, myself_buff.aid, 8);
     }
     else {
@@ -96,8 +103,4 @@ void get_aid(void *aid) {
 
 void get_sn(void *sequence) {
     memcpy((char*)sequence, (char*)&__sn, sizeof(__sn));
-}
-
-void get_aes_key(void *key) {
-    memcpy((char*)key, (char*)__aes_key, 16);
 }

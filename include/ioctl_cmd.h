@@ -14,12 +14,13 @@ enum  CMD_TYPE {
 typedef struct __set_key_mes {
     unsigned int sn;
     char mac[6];
-    char aes_key[16];
+    char aes_key[16];   // 这个 aes_key 是指与本机通信的时候使用的加密密钥
+    char ip6[16];
+    char aid[8];
 } SET_KEY_MES;
 
 typedef struct __set_myself_mes {
     unsigned int sn;
-    char aes_key[16];
     char aid[8];
 } SET_MYSELF_MES;
 

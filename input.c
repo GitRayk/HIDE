@@ -14,7 +14,8 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     // 然后再根据这个 AID 及其他信息去验证 IPC 是否正确，正确则放行数据包
     struct ethhdr *eth_header = eth_hdr(skb);
     LABEL_HEADER *label_hdr = NULL;
-    const TERMINAL_INFO *tinfo = NULL; 
+    const TERMINAL_ENCRYPT_INFO *tinfo = NULL; 
+    const TERMINAL_IP_INFO *ip_info = NULL;
     char *char_addr = NULL;
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
 
@@ -35,7 +36,16 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         if (remove_extended_header(skb, plaintext) == -1)
             return NF_DROP;
         
-        set_ether(skb);
+        // set_ether(skb);
+        // 得到 AID 之后，需要根据 AID 还原出真实的源 IPv6 地址再交给上层处理
+        ip_info = find_terminal_of_aid(plaintext);
+        if(ip_info == NULL) {
+            printk(KERN_INFO "Can't find any ipv6 address of AID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X\n",
+                    plaintext[0], plaintext[1], plaintext[2], plaintext[3], plaintext[4], plaintext[5], plaintext[6], plaintext[7]);
+            return NF_DROP;
+        }
+        memcpy(&(ipv6_hdr(skb)->saddr), ip_info->ip6, 16);
+
         return NF_ACCEPT;
     }
 
