@@ -47,6 +47,12 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     struct neighbour *neigh = NULL;
 
     s64 start_time = ktime_to_ns(ktime_get());
+
+    // 如果这个数据包是邻居请求数据||邻居通告就不进行任何处理
+    if(ipv6_hdr(skb)->nexthdr == IPPROTO_ICMPV6 && (icmp6_hdr(skb)->icmp6_type == 135 || icmp6_hdr(skb)->icmp6_type == 136)) {
+        return NF_ACCEPT;
+    }
+
     //  发送端发送时从 kern_ioctl 模块查询自己加密信息
     // 通过比较源IP判断数据包是否是自己发送的，如果是，则从 kern_ioctl 模块；如果不是，则查找对应IP的AID
     dev = state->out;
@@ -73,7 +79,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
 
     // 由于数据包要由下一跳，所以使用的本机与下一跳之间的对称密钥。即由下一跳mac映射密钥，由于钩子函数在网络层，所以通过邻居表找到目的IP的下一跳mac
     neigh = neigh_lookup(&nd_tbl, &daddr, dev);
-    if (neigh) {
+    if (neigh != NULL && neigh->nud_state == NUD_REACHABLE) {
         encrypt_info = find_terminal_of_mac(neigh->ha);
         if(encrypt_info == NULL) {
             printk("Can't get encryption info of mac: %pM", neigh->ha);
@@ -81,8 +87,11 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
         }
         memcpy(aes_key, encrypt_info->encrypt_key, 16);
     } else {
-        printk("Cann't get mac of ipv6: %pI6", &daddr);
-        return NF_DROP;
+        // 当发现当前邻居表中没有这项或表项失效的时候，没法将数据加密（因为不知道使用哪个对称密钥）
+        // 所以必须让这个数据包直接到达数据链路层，然后数据链路层就会发送邻居请求
+        //（或者用一个一定会被接收端丢弃的数据包，这样就保证了除了NS，不会产生不携带地址标签扩展报头的有效数据包）
+        printk("Can't get mac of ipv6: %pI6", &daddr);     
+        return NF_ACCEPT;
     }
 
     // 获取 IID || EEA
@@ -106,7 +115,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
 
     // return NF_STOLEN;
     s64 end_time = ktime_to_ns(ktime_get());
-    printk("hook function total time: %lld\n", end_time - start_time);
+    printk("hook_output function total time: %lld ns", end_time - start_time);
     return NF_ACCEPT;
 }
 
