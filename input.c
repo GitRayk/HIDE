@@ -41,6 +41,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
                     plaintext[0], plaintext[1], plaintext[2], plaintext[3], plaintext[4], plaintext[5], plaintext[6], plaintext[7]);
             return NF_DROP;
         }
+        printk("数据包源IP[%pI6]对应的真实地址为[%pI6]", &(ipv6_hdr(skb)->saddr), ip_info->ip6);
         memcpy(&(ipv6_hdr(skb)->saddr), ip_info->ip6, 16);
 
         return NF_ACCEPT;

@@ -79,7 +79,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
 
     // 由于数据包要由下一跳，所以使用的本机与下一跳之间的对称密钥。即由下一跳mac映射密钥，由于钩子函数在网络层，所以通过邻居表找到目的IP的下一跳mac
     neigh = neigh_lookup(&nd_tbl, &daddr, dev);
-    if (neigh != NULL && neigh->nud_state == NUD_REACHABLE) {
+    if (neigh != NULL && (neigh->nud_state == NUD_REACHABLE || neigh->nud_state == NUD_PERMANENT)) {
         encrypt_info = find_terminal_of_mac(neigh->ha);
         if(encrypt_info == NULL) {
             printk("Can't get encryption info of mac: %pM", neigh->ha);
