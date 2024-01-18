@@ -5,7 +5,7 @@
 #include "kern_hash.h"
 
 #ifndef IPPROTO_LABEL
-#define IPPROTO_LABEL 253
+#define IPPROTO_LABEL 139
 #define ETH_ADDRESS_LEN 6
 #define IPV6_ADDRESS_LEN 16
 #define IPV6_HEADER_LEN 40

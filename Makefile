@@ -11,5 +11,5 @@ clean:
 
 # 启动 app 之前要使用命令 sudo mknod /dev/labelCmd c 168 0
 app:
-	g++ -I/usr/include/crypto++ -o receiver Receiver.cpp -lcryptopp
-	g++ -I/usr/include/crypto++ -o sender Sender.cpp -lcryptopp
+	g++ -I/usr/include/crypto++ -o ./test/receiver ./test/Receiver.cpp -lcryptopp
+	g++ -I/usr/include/crypto++ -o ./test/sender ./test/Sender.cpp -lcryptopp
