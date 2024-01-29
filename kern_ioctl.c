@@ -10,7 +10,7 @@ static struct file_operations fops = {
     .owner = THIS_MODULE,
     .open = kern_cmd_open,
     .release = kern_cmd_close,
-    .read = NULL,
+    .read = kern_cmd_read,
     .write = NULL,
     .unlocked_ioctl = get_unlocked_ioctl
 };
@@ -57,6 +57,40 @@ void ioctl_exit(void) {
 
 
 /* 设备实际的业务逻辑函数 */
+
+ssize_t kern_cmd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos) {
+    // 当程序试图读取该设备文件时，按 SET_MYSELF_MES 的格式显示该终端的 sn 和 aid
+    // 如果内核还没有获取到 sn 和 aid，则显示提示信息
+    SET_MYSELF_MES myself_buff;
+    static int end_of_info = 0;     // 控制显示信息的长度，当 count 过大时也只可读一次完整的信息
+    char tips[] = "No Info\n";
+    char*info = NULL;
+    int info_len = 0;
+    int pos = 0;        // pos 表示当前读取的信息位置
+
+    // 当 end_of_info 为 1 时表示已经完整的读取过一次信息，则返回 0 以终止本次读取，并重置控制变量
+    if(end_of_info == 1) {
+        end_of_info = 0;
+        return 0;
+    }
+
+    if(__sn == 0) {
+        info = tips;
+        info_len = strlen(tips);
+    }
+    else {
+        info = (char *)&myself_buff;
+        info_len = sizeof(SET_MYSELF_MES);
+    }
+    info_len = info_len < count ? info_len : count;
+
+    while(pos < info_len) {
+        put_user(*info, buf);
+        buf++, info++, pos++;
+    }
+    end_of_info = 1;
+    return info_len;
+}
 
 long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long args) {
     IOCTL_CMD iocmd;

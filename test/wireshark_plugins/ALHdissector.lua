@@ -52,6 +52,6 @@ do
         ALH_dissector(buf,pinfo,root)
     end
     
-    --将协议解析器添加到 DissectorTable 中去，并且当 ip 的 protocol 字段(IPv6下的 next header 字段)对应的值/pattern 是 139（地址标签）时触发该 Dissector
-    DissectorTable.get("ip.proto"):add(139, p_ALH)
+    --将协议解析器添加到 DissectorTable 中去，并且当 ip 的 protocol 字段(IPv6下的 next header 字段)对应的值/pattern 是 146（地址标签）时触发该 Dissector
+    DissectorTable.get("ip.proto"):add(146, p_ALH)
 end

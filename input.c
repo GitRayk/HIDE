@@ -22,7 +22,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     tinfo = find_terminal_of_mac(eth_header->h_source);
     if(tinfo == NULL) {
         printk(KERN_INFO "Can't find any aes key of Source MAC Address: %pM\n", eth_header->h_source);
-        return NF_DROP;     // 如果查不到对应的密钥，直接丢弃数据包
+        return NF_ACCEPT;     // 如果查不到对应的密钥，直接接受该数据包
     }
 
     label_hdr = skb_label_header(skb);
@@ -47,7 +47,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         return NF_ACCEPT;
     }
 
-    // 当没有使用地址标签的系统时，数据包正常放行？还是丢弃？如果是后者，那还需要在该函数中给NDP开个后门
+    // 当存在对称密钥，但是该数据包没有携带地址标签扩展报头时，数据包正常放行？还是丢弃？如果是后者，那还需要在该函数中给NDP开个后门
     return NF_ACCEPT;
 }
 

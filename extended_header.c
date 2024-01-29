@@ -27,13 +27,10 @@ void print_ALH(LABEL_HEADER *alh) {
 
 // 调用 get_ipc 的前提条件是数据包有 IP 头，所以不要在去掉了 IP 头之后才调用，同时要保证 transport_header 和 network_header 的值正确
 static void get_ipc(struct sk_buff *skb,  const char *AID, const char* EEA, unsigned int eea_len, unsigned int ts, unsigned sn, char *target) {
-    char *transport_hash = NULL;
     char *hash_plaintext = NULL;
-    unsigned int plaintext_len = IPV6_ADDRESS_LEN+ IPV6_ADDRESS_LEN + 8 + eea_len + sizeof(ts) + sizeof(sn) + get_digest_size();
+    unsigned int plaintext_len = IPV6_ADDRESS_LEN+ IPV6_ADDRESS_LEN + 8 + eea_len + sizeof(ts) + sizeof(sn);
     char *plaintext_buff = NULL;    // 用于指示当前的拼接位置
-    // 将 (源IP || 目的 IP || AID  || EEA || TS || SN || Hash(传输层)) 进行一次哈希得到扩展报头中的 IPC 字段
-    transport_hash = kmalloc(get_digest_size(), GFP_KERNEL);
-    get_hash(skb_transport_header(skb), skb->tail - skb->transport_header, transport_hash);
+    // 将 (源IP || 目的 IP || AID  || EEA || TS || SN) 进行一次哈希得到扩展报头中的 IPC 字段
     hash_plaintext = kmalloc(plaintext_len, GFP_KERNEL);
     plaintext_buff = hash_plaintext;
     memcpy(plaintext_buff, (char*)&(ipv6_hdr(skb)->saddr), IPV6_ADDRESS_LEN);
@@ -48,11 +45,8 @@ static void get_ipc(struct sk_buff *skb,  const char *AID, const char* EEA, unsi
     plaintext_buff += sizeof(ts);
     memcpy(plaintext_buff, (char*)&sn, sizeof(sn));
     plaintext_buff += sizeof(sn);
-    memcpy(plaintext_buff, transport_hash, get_digest_size());
-    plaintext_buff += get_digest_size();
 
-    kfree(transport_hash);
-    transport_hash = NULL, plaintext_buff = NULL;    
+    plaintext_buff = NULL;    
 
     get_hash(hash_plaintext, plaintext_len, target);
     kfree(hash_plaintext);
@@ -94,7 +88,7 @@ int add_extended_header(struct sk_buff *skb, const char *AID, unsigned int ts, u
 
     kfree(IPC);
     IPC = NULL;
-    print_ALH(extended_header);
+    // print_ALH(extended_header);
 
     // 恢复IPv6基本报头
     ipv6_header.nexthdr = IPPROTO_LABEL;

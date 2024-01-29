@@ -83,7 +83,8 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
         encrypt_info = find_terminal_of_mac(neigh->ha);
         if(encrypt_info == NULL) {
             printk("Can't get encryption info of mac: %pM", neigh->ha);
-            return NF_DROP;
+            // 当找到下一跳之后，发现与下一跳之间没有对称密钥，无法进行加密，则直接按原数据包发送（适应非协作网络）
+            return NF_ACCEPT;
         }
         memcpy(aes_key, encrypt_info->encrypt_key, 16);
     } else {
