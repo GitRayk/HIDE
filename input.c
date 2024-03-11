@@ -19,6 +19,10 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     char *char_addr = NULL;
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
 
+    // 通过netlink发送给用户空间的信息
+    CHANNEL_MES mesg;
+    s64 start_time = 0, end_time = 0;   // 记录解密的开始时间和结束时间，以计算开销
+
     tinfo = find_terminal_of_mac(eth_header->h_source);
     if(tinfo == NULL) {
         printk(KERN_INFO "Can't find any aes key of Source MAC Address: %pM\n", eth_header->h_source);
@@ -28,10 +32,29 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     label_hdr = skb_label_header(skb);
     if(label_hdr != NULL) {
         char_addr = (char*)&(ipv6_hdr(skb)->saddr);
+        start_time = ktime_to_ns(ktime_get());
         aes_decrypt(tinfo->encrypt_key, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
+        end_time = ktime_to_ns(ktime_get());
 
-        if (remove_extended_header(skb, plaintext) == -1)
+        // 解密完成后，通过netlink向用户空间的进程发送消息
+        memset((char*)&mesg, 0, sizeof(CHANNEL_MES));
+        get_aid(mesg.source);
+        memcpy(mesg.label, char_addr, 16);
+        memcpy(mesg.aid, plaintext, 8);
+        mesg.delayTime = end_time - start_time;
+
+        if (remove_extended_header(skb, plaintext) == -1) {
+            strncpy(mesg.states, "bad", 8);
+            strncpy(mesg.notes, "IPC ERROR", 16);
+            channel_send((char*)&mesg, sizeof(CHANNEL_MES));
             return NF_DROP;
+        }
+        else {
+            //  remove_extended_header 的返回值为正数 (因为返回值为 -2 的情况在该代码块中不可能发生)
+            strncpy(mesg.states, "good", 8);
+            strncpy(mesg.notes, "", 16);
+            channel_send((char*)&mesg, sizeof(CHANNEL_MES));
+        }
         
         // set_ether(skb);
         // 得到 AID 之后，需要根据 AID 还原出真实的源 IPv6 地址再交给上层处理

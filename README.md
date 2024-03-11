@@ -44,7 +44,7 @@ mac: 00:0c:29:c2:86:18
     ```
 3. (option) 手动将邻居表的表项添加为永久有效
     ``` shell
-    sudo ip neigh change 2023::1/64 lladdr 00:0c:29:c2:86:18 dev ens34
+    sudo ip neigh change 2023::1 lladdr 00:0c:29:c2:86:18 dev ens34
     ```
 4. 运行 test/simple_comm 中的 python 文件进行 udp、tcp测试
     ``` shell

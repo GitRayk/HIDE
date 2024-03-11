@@ -130,7 +130,7 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     else {
         printk("There is no Address Label Header");
         kfree(IPC);
-        return -1;
+        return -2;
     }
     IPC = NULL;
 

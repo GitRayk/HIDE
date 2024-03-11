@@ -6,6 +6,7 @@
 #include "kern_aes.h"
 #include "kern_hash.h"
 #include "kern_ioctl.h"
+#include "channel.h"
 
 
 static int __init my_module_init(void) {
@@ -15,6 +16,7 @@ static int __init my_module_init(void) {
     aes_init();
     kern_hash_init();
     ioctl_init();
+    channel_init();
 
     pr_info("Extended module loaded\n");
     return 0;
@@ -27,6 +29,7 @@ static void __exit my_module_exit(void) {
     aes_exit();
     kern_hash_exit();
     ioctl_exit();
+    channel_exit();
 
     pr_info("Extended module unloaded\n");
 }
