@@ -12,17 +12,25 @@
 * kern_hash：实现哈希运算  
 * kern_ioctl：通过字符设备文件实现从用户空间接受下发的命令（下发设备参数）并进行处理  
 * ioctl_cmd：定义了用户空间与内核模块交互的通用信息格式  
+* channel：定义了内核与用户空间通信的 netlink 通道  
+
+
+## 依赖
+```
+sudo apt install linux-headers-$(uname -r) libcurl4-openssl-dev libjson-c-dev
+```
 
 ## 部署说明
 按以下顺序执行：  
 
 创建设备文件： `sudo mknod /dev/labelCmd c 168 0`  
 编译该项目：`make all`  
-插入内核模块：`sudo insmod extended.ko`
+插入内核模块：`sudo insmod extended.ko`  
+编译并运行用户态应用程序：`gcc ./user_app/channel_app.c -o ./user_app/app -lcurl -ljson-c`  
 
 ## 测试说明
 ### 测试环境1
-主机 A 与路由器 R 直接连接  
+主机 A 与路由器 R 直接连接，且均与web服务器 W 相连  
 A 的网卡配置为:  
 ```
 ipv6: 2023::2
@@ -33,6 +41,11 @@ R 的网卡配置为:
 ```
 ipv6: 2023::1
 mac: 00:0c:29:c2:86:18
+```
+
+W 的配置为：  
+```
+ipv4: 192.168.245.129
 ```
 
 ### 测试步骤
@@ -46,9 +59,14 @@ mac: 00:0c:29:c2:86:18
     ``` shell
     sudo ip neigh change 2023::1 lladdr 00:0c:29:c2:86:18 dev ens34
     ```
-4. 运行 test/simple_comm 中的 python 文件进行 udp、tcp测试
+4. 启动用户态应用程序
+    ```
+    ./user_app/app -s 192.168.245.129 -r 0.0.0.0
+    ```
+5. 运行 test/simple_comm 中的 python 文件进行 udp、tcp测试
     ``` shell
     python3 tcp_py_client.py
     python3 udp_py_client.py
     ```
-5. 使用 wireshark 抓包观察数据
+6. 使用 wireshark 抓包观察数据  
+7. 使用浏览器访问 192.168.245.129，查看数据

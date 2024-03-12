@@ -7,7 +7,7 @@ do
     local f_reserved = ProtoField.uint8("ALH.reserved", "Reserved", base.HEX)
     local f_ts = ProtoField.uint32("ALH.ts", "Timestamp", base.HEX)
     local f_sn = ProtoField.uint32("ALH.sn", "Sequence", base.HEX)
-    local f_eea = ProtoField.string("ALH.eea", "Extra Encrypted Address", base.ASCII)
+    local f_eea = ProtoField.uint64("ALH.eea", "Extra Encrypted Address", base.HEX)
     local f_ipc = ProtoField.string("ALH.ipc", "Integrity Protection Code", base.ASCII)
 
     --将所有的协议字段 ProtoField 添加到 Proto 中去

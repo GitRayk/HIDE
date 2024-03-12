@@ -8,10 +8,15 @@
 #include <errno.h>
 #include <signal.h>
 #include <curl/curl.h>
+#include <getopt.h>
+#include <json-c/json.h>
 
 #define MSG_LEN            125
 #define MAX_PLOAD        125
 #define NETLINK_PID     100
+
+static char webserver[64];
+static char registerserver[64];
 
 // Netlink 消息格式
 typedef  struct __channel_mes {
@@ -29,13 +34,21 @@ typedef struct _user_msg_info
     CHANNEL_MES mes;
 } USER_MSG_INFO;
 
+// 处理程序参数
+int option_proc(int argc, char* argv[]);
+
 // 将数据通过api发送到服务器后端
-void send_to_server(CHANNEL_MES* mes);
+int send_to_server(CHANNEL_MES* mes);
 
 // 向注册服务器询问aid是否存在
 int exist_aid(char* aid);
 
-int main(int argc, char **argv)
+// 用于保存返回内容的字符串
+static char curl_res[1024];
+// 回调函数，用于接收注册服务器的json数据
+size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
+
+int main(int argc, char *argv[])
 {
     int ret;
     USER_MSG_INFO u_info;
@@ -45,6 +58,9 @@ int main(int argc, char **argv)
     struct sockaddr_nl saddr, daddr; //saddr 表示源端口地址，daddr表示目的端口地址
     char *umsg = "user app starts";
 
+    if(option_proc(argc, argv) != 0) {
+        return -1;
+    }
 
     /* 创建NETLINK socket */ 
     skfd = socket(AF_NETLINK, SOCK_RAW, NETLINK_USERSOCK);
@@ -101,7 +117,8 @@ int main(int argc, char **argv)
         }
         else {
             // 将内核发送来的数据包信息进行处理，然后交付给前端服务器的数据库
-            send_to_server(&u_info.mes);
+            if(send_to_server(&u_info.mes) == -1)
+                break;
         }
     }
 
@@ -110,13 +127,54 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void send_to_server(CHANNEL_MES* mes) {
+int option_proc(int argc, char* argv[]) {
+    int opt = 0;
+    int longindex = 0;
+    const char getopt_str[] = "s:r:";
+    static struct option long_options[] = {
+        {"webserver", required_argument, 0, 's'},
+        {"registerserver", required_argument, 0, 'r'}
+    };
+
+    while((opt = getopt_long(argc, argv, getopt_str, long_options, &longindex)) != -1) {
+        switch(opt) {
+            case 's':
+                strncpy(webserver, optarg, 64);
+                break;
+            case 'r':
+                strncpy(registerserver, optarg, 64);
+                break;
+            default:
+                printf("未知的参数：%s\n", long_options[longindex].name);
+                return -1;
+        }
+    }
+    if(strlen(webserver) && strlen(registerserver))
+        return 0;
+    else {
+        printf("所需参数:\n");
+        printf("\t--webserver, -s\t\t\033[4mIP\033[0m\n");
+        printf("\t\t指定数据展示的前端服务器地址\n");
+        printf("\n");
+        printf("\t--registerserver, -r\t\033[4mIP\033[0m\n");
+        printf("\t\t指定注册与查询aid的服务器地址\n");
+        return -1;
+    }
+}
+
+int send_to_server(CHANNEL_MES* mes) {
     CURL *curl;
     CURLcode res;
+
+    // 请求api地址
+    char request_post[64] = "http://";
+    strcat(request_post, webserver);
+    strcat(request_post, "/api/upload.php");
+
     curl = curl_easy_init();
     if(curl) {
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_easy_setopt(curl, CURLOPT_URL, "http://192.168.245.129/api/upload.php");
+        curl_easy_setopt(curl, CURLOPT_URL, request_post);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
         struct curl_slist *headers = NULL;
@@ -149,10 +207,65 @@ void send_to_server(CHANNEL_MES* mes) {
 
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
         res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            printf("Connection to webserver %s failed\n", webserver);
+            return -1;
+        }
+        curl_easy_cleanup(curl);
+        return 0;
     }
-    curl_easy_cleanup(curl);
+    else
+        return -1;
+}
+
+size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    // 这里可以做越界检查，确保数据不会超出data的容量
+    memcpy(curl_res, contents, realsize);
+    curl_res[realsize] = '\0';
+    return realsize;
 }
 
 int exist_aid(char* aid) {
-    return 1;
+    CURL *curl;
+    CURLcode res;
+
+    // 解析JSON字符串
+    struct json_object *parsed_json = NULL;
+    struct json_object *json_exist;
+
+    // 请求api地址
+    char request_get[64] = "http://";
+    strcat(request_get, registerserver);
+    strcat(request_get, "/verify?aid=");
+    strcat(request_get, aid);
+
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+        curl_easy_setopt(curl, CURLOPT_URL, request_get);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "User-Agent: Apifox/1.0.0 (https://apifox.com)");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        res = curl_easy_perform(curl);  
+
+        if(res != CURLE_OK) {
+            return -1;
+        } else {
+            parsed_json = json_tokener_parse(curl_res);
+            if (!json_object_object_get_ex(parsed_json, "exist", &json_exist) || strcmp(json_object_get_string(json_exist), "true") != 0) {
+                curl_easy_cleanup(curl);
+                json_object_put(parsed_json);   // 释放JSON对象
+                return 0;
+            }
+            else {
+                curl_easy_cleanup(curl);
+                json_object_put(parsed_json);   // 释放JSON对象
+                return 1;
+            }
+        }
+    }
 }
