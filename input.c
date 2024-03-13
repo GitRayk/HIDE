@@ -18,6 +18,9 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     const TERMINAL_IP_INFO *ip_info = NULL;
     char *char_addr = NULL;
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
+    struct net_device *dev;
+    struct in6_addr net_device_ip, saddr, daddr;
+    const TERMINAL_AID_INFO *aid_info = NULL;
 
     // 通过netlink发送给用户空间的信息
     CHANNEL_MES mesg;
@@ -38,7 +41,24 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
 
         // 解密完成后，通过netlink向用户空间的进程发送消息
         memset((char*)&mesg, 0, sizeof(CHANNEL_MES));
-        get_aid(mesg.source);
+        dev = state->in;
+        daddr = ipv6_hdr(skb)->daddr;
+        saddr = ipv6_hdr(skb)->saddr;
+        if (ipv6_dev_get_saddr(&init_net, dev, &daddr, 0, &net_device_ip) != 0) {
+            printk("Can't find net device [%s]ipv6 to %pI6", dev->name, &daddr);
+            memset(mesg.source, 0, 8);
+        } 
+        else {
+            aid_info = find_terminal_of_ip6((char*)&net_device_ip);
+            if(aid_info == NULL) {
+                printk("Can't get aid of ipv6: %pI6", &net_device_ip);
+                memset(mesg.source, 0, 8);
+            }
+            else {
+                memcpy(mesg.source, aid_info->aid, 8);
+            }
+        }
+        
         memcpy(mesg.label, char_addr, 16);
         memcpy(mesg.aid, plaintext, 8);
         mesg.delayTime = end_time - start_time;

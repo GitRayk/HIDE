@@ -1,9 +1,5 @@
 #include "kern_ioctl.h"
 
-// 这些数据是本终端的信息
-static char __AID[8];
-static unsigned int __sn;
-
 static int cmd_major = CMD_MAJOR;
 
 static struct file_operations fops = {
@@ -39,9 +35,6 @@ int ioctl_init(void) {
     // 注册设备文件，用于与用户空间进行交互
     int ret;
 
-    memset(__AID, 0, 8);
-    __sn = 0;
-
     ret = register_chrdev(cmd_major, CMD_DEV_NAME, &fops);
     if(ret < 0) return ret;
     if(ret > 0) cmd_major = ret;
@@ -59,9 +52,7 @@ void ioctl_exit(void) {
 /* 设备实际的业务逻辑函数 */
 
 ssize_t kern_cmd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos) {
-    // 当程序试图读取该设备文件时，按 SET_MYSELF_MES 的格式显示该终端的 sn 和 aid
-    // 如果内核还没有获取到 sn 和 aid，则显示提示信息
-    SET_MYSELF_MES myself_buff;
+    // 当程序试图读取该设备文件时，输出提示信息
     static int end_of_info = 0;     // 控制显示信息的长度，当 count 过大时也只可读一次完整的信息
     char tips[] = "No Info\n";
     char*info = NULL;
@@ -74,14 +65,8 @@ ssize_t kern_cmd_read(struct file *filp, char __user *buf, size_t count, loff_t 
         return 0;
     }
 
-    if(__sn == 0) {
-        info = tips;
-        info_len = strlen(tips);
-    }
-    else {
-        info = (char *)&myself_buff;
-        info_len = sizeof(SET_MYSELF_MES);
-    }
+    info = tips;
+    info_len = strlen(tips);
     info_len = info_len < count ? info_len : count;
 
     while(pos < info_len) {
@@ -95,7 +80,6 @@ ssize_t kern_cmd_read(struct file *filp, char __user *buf, size_t count, loff_t 
 long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long args) {
     IOCTL_CMD iocmd;
     SET_KEY_MES buff;
-    SET_MYSELF_MES myself_buff;
     memset(&iocmd, 0, sizeof(IOCTL_CMD));
 
     //获取用户空间的命令参数，并根据命令做具体的操作
@@ -118,23 +102,9 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
         else
             update_terminal_aid_info(buff.ip6, buff.aid, buff.sn);
     }
-    else if (iocmd.type == IOCTL_SET_MYSELF) {
-        copy_from_user((char*)&myself_buff, (char*)iocmd.buff, sizeof(SET_MYSELF_MES));
-        __sn = myself_buff.sn;
-        memcpy(__AID, myself_buff.aid, 8);
-    }
     else {
         printk("Error ioctl type: %d", iocmd.type);
         return -1;
     }
     return 0;
-}
-
-// aid、sn、aes_key 只能通过 getter 来获取，防止被其他模块修改
-void get_aid(void *aid) {
-    memcpy((char*)aid, (char*)__AID, 8);
-}
-
-void get_sn(void *sequence) {
-    memcpy((char*)sequence, (char*)&__sn, sizeof(__sn));
 }

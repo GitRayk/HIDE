@@ -53,8 +53,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
         return NF_ACCEPT;
     }
 
-    //  发送端发送时从 kern_ioctl 模块查询自己加密信息
-    // 通过比较源IP判断数据包是否是自己发送的，如果是，则从 kern_ioctl 模块；如果不是，则查找对应IP的AID
+    //  通过数据包源IP地址找到对应的aid
     dev = state->out;
     daddr = ipv6_hdr(skb)->daddr;
     saddr = ipv6_hdr(skb)->saddr;
@@ -63,19 +62,13 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
         return NF_DROP;
     }
 
-    if(memcmp(&saddr, &net_device_ip, IPV6_ADDRESS_LEN) == 0) {
-        get_aid(AID);
-        get_sn(&sn);
+    aid_info = find_terminal_of_ip6((char*)&saddr);
+    if(aid_info == NULL) {
+        printk("Can't get aid of ipv6: %pI6", &saddr);
+        return NF_DROP;
     }
-    else {
-        aid_info = find_terminal_of_ip6((char*)&saddr);
-        if(aid_info == NULL) {
-            printk("Can't get aid of ipv6: %pI6", &saddr);
-            return NF_DROP;
-        }
-        memcpy(AID, aid_info->aid, 8);
-        sn=aid_info->sn;
-    }
+    memcpy(AID, aid_info->aid, 8);
+    sn=aid_info->sn;
 
     // 由于数据包要由下一跳，所以使用的本机与下一跳之间的对称密钥。即由下一跳mac映射密钥，由于钩子函数在网络层，所以通过邻居表找到目的IP的下一跳mac
     neigh = neigh_lookup(&nd_tbl, &daddr, dev);
