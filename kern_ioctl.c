@@ -80,6 +80,7 @@ ssize_t kern_cmd_read(struct file *filp, char __user *buf, size_t count, loff_t 
 long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long args) {
     IOCTL_CMD iocmd;
     SET_KEY_MES buff;
+    SET_AID_MES buff_aid;
     memset(&iocmd, 0, sizeof(IOCTL_CMD));
 
     //获取用户空间的命令参数，并根据命令做具体的操作
@@ -88,19 +89,21 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
     if(iocmd.type == IOCTL_SET_AES_KEY) {
         copy_from_user((char*)&buff, (char*)iocmd.buff, sizeof(SET_KEY_MES));
         if(find_terminal_of_mac(buff.mac) == NULL)
-            insert_terminal_encrypt_info(buff.mac, buff.aes_key, buff.sn);
+            insert_terminal_encrypt_info(buff.mac, buff.aes_key);
         else
-            update_terminal_encrypt_info(buff.mac, buff.aes_key, buff.sn);
+            update_terminal_encrypt_info(buff.mac, buff.aes_key);
+    }
+    else if(iocmd.type == IOCTL_SET_AID) {
+        copy_from_user((char*)&buff_aid, (char*)iocmd.buff, sizeof(SET_AID_MES));
+        if(find_terminal_of_aid(buff_aid.aid) == NULL)
+            insert_terminal_ip_info(buff_aid.aid, buff_aid.ip6, buff_aid.sn);
+        else
+            update_terminal_ip_info(buff_aid.aid, buff_aid.ip6, buff_aid.sn);
 
-        if(find_terminal_of_aid(buff.aid) == NULL)
-            insert_terminal_ip_info(buff.aid, buff.ip6);
+        if(find_terminal_of_ip6(buff_aid.ip6) == NULL)
+            insert_terminal_aid_info(buff_aid.ip6, buff_aid.aid, buff_aid.sn);
         else
-            update_terminal_ip_info(buff.aid, buff.ip6);
-
-        if(find_terminal_of_ip6(buff.ip6) == NULL)
-            insert_terminal_aid_info(buff.ip6, buff.aid, buff.sn);
-        else
-            update_terminal_aid_info(buff.ip6, buff.aid, buff.sn);
+            update_terminal_aid_info(buff_aid.ip6, buff_aid.aid, buff_aid.sn);
     }
     else {
         printk("Error ioctl type: %d", iocmd.type);
