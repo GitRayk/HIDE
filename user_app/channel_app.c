@@ -10,6 +10,11 @@
 #include <curl/curl.h>
 #include <getopt.h>
 #include <json-c/json.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#include "channel_mes.h"
+#include "ioctl_cmd.h"
 
 #define MSG_LEN            125
 #define MAX_PLOAD        125
@@ -17,16 +22,7 @@
 
 static char webserver[64];
 static char registerserver[64];
-
-// Netlink 消息格式
-typedef  struct __channel_mes {
-    unsigned char source[8];
-    char states[8];
-    unsigned char label[16];
-    char notes[16];
-    unsigned char aid[8];
-    unsigned int delayTime;
-} CHANNEL_MES;
+static char dataserver[64];
 
 typedef struct _user_msg_info
 {
@@ -38,15 +34,19 @@ typedef struct _user_msg_info
 int option_proc(int argc, char* argv[]);
 
 // 将数据通过api发送到服务器后端
-int send_to_server(CHANNEL_MES* mes);
+int send_to_server(UPLOAD_MES* mes);
 
 // 向注册服务器询问aid是否存在
 int exist_aid(char* aid);
+
+void request_get_map(unsigned int type, unsigned char *data);
 
 // 用于保存返回内容的字符串
 static char curl_res[1024];
 // 回调函数，用于接收注册服务器的json数据
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
+// 回调函数，用于处理ipv6地址和aid的映射关系
+size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp);
 
 int main(int argc, char *argv[])
 {
@@ -117,8 +117,20 @@ int main(int argc, char *argv[])
         }
         else {
             // 将内核发送来的数据包信息进行处理，然后交付给前端服务器的数据库
-            if(send_to_server(&u_info.mes) == -1)
-                break;
+            if(u_info.mes.type == NL_UPLOAD_LOG) {
+                if(strcmp(u_info.mes.upload_data.states, "good") == 0 &&  0 == exist_aid(u_info.mes.upload_data.aid)) {
+                    strncpy(u_info.mes.upload_data.states, "bad", 16);
+                    strncpy(u_info.mes.upload_data.notes, "AID DOES NOT EXIST", 24);
+                }
+                if(send_to_server(&u_info.mes.upload_data) == -1)
+                    break;
+            }
+            else if(u_info.mes.type == NL_REQUEST_AID || u_info.mes.type == NL_REQUEST_IP6) {
+                request_get_map(u_info.mes.type, (unsigned char*)((&u_info.mes.type)+1));
+            }
+            else {
+                printf("Receive unrecognized channel message type: %d\n", u_info.mes.type);
+            }
         }
     }
 
@@ -130,10 +142,11 @@ int main(int argc, char *argv[])
 int option_proc(int argc, char* argv[]) {
     int opt = 0;
     int longindex = 0;
-    const char getopt_str[] = "s:r:";
+    const char getopt_str[] = "s:r:d:";
     static struct option long_options[] = {
         {"webserver", required_argument, 0, 's'},
-        {"registerserver", required_argument, 0, 'r'}
+        {"registerserver", required_argument, 0, 'r'},
+        {"dataserver", required_argument, 0, 'd'}
     };
 
     while((opt = getopt_long(argc, argv, getopt_str, long_options, &longindex)) != -1) {
@@ -144,12 +157,15 @@ int option_proc(int argc, char* argv[]) {
             case 'r':
                 strncpy(registerserver, optarg, 64);
                 break;
+            case 'd':
+                strncpy(dataserver, optarg, 64);
+                break;
             default:
                 printf("未知的参数：%s\n", long_options[longindex].name);
                 return -1;
         }
     }
-    if(strlen(webserver) && strlen(registerserver))
+    if(strlen(webserver) && strlen(registerserver) && strlen(dataserver))
         return 0;
     else {
         printf("所需参数:\n");
@@ -158,11 +174,14 @@ int option_proc(int argc, char* argv[]) {
         printf("\n");
         printf("\t--registerserver, -r\t\033[4mIP\033[0m\n");
         printf("\t\t指定注册与查询aid的服务器地址\n");
+        printf("\n");
+        printf("\t--dataserver, -d\t\033[4mIP\033[0m\n");
+        printf("\t\t指定存储和查询aid-ipv6的数据服务器\n");
         return -1;
     }
 }
 
-int send_to_server(CHANNEL_MES* mes) {
+int send_to_server(UPLOAD_MES* mes) {
     CURL *curl;
     CURLcode res;
 
@@ -268,4 +287,89 @@ int exist_aid(char* aid) {
             }
         }
     }
+}
+
+size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp) {
+    int fd;
+    IOCTL_CMD cmd;
+    SET_AID_MES kern_mes;
+    int i;
+    // 解析JSON字符串
+    struct json_object *parsed_json = NULL;
+    struct json_object *json_result;
+    struct json_object *json_ip6, *json_aid, *json_sn;
+
+    unsigned char data[1024];
+    size_t realsize = size * nmemb;
+    // 这里可以做越界检查，确保数据不会超出data的容量
+    memcpy(data, contents, realsize);
+    data[realsize] = '\0';
+
+    parsed_json = json_tokener_parse(data);
+    if (!json_object_object_get_ex(parsed_json, "result", &json_result) || strcmp(json_object_get_string(json_result), "success") != 0) {
+        printf("error\n");
+        json_object_put(parsed_json);   // 释放JSON对象
+        return 0;
+    }
+    else {
+        // 将获取到的aid-ipv6映射下发给内核
+        json_object_object_get_ex(parsed_json, "ip6", &json_ip6);
+        json_object_object_get_ex(parsed_json, "aid", &json_aid);
+        json_object_object_get_ex(parsed_json, "sn", &json_sn);
+        // 要将获取的字符串转换成十六进制的字节表示
+        for(i = 0; i < 16; i += 2) sscanf(json_object_get_string(json_aid) + i, "%2hhx", &kern_mes.aid[i/2]);
+        for(i = 0; i < 32; i += 2) sscanf(json_object_get_string(json_ip6) + i, "%2hhx", &kern_mes.ip6[i/2]);
+        kern_mes.sn = json_object_get_int(json_sn);
+        // 打开字符设备文件发送命令
+        fd = open(CMD_DEV_PATH, O_RDONLY);
+        if(fd <= 0) {
+            printf("Open cmd device error\n");
+            return -1;
+        }
+        cmd.type = IOCTL_SET_AID;
+        cmd.buff = &kern_mes;
+        ioctl(fd, IOCTL_DEV_LABEL, &cmd);
+
+        close(fd);
+        json_object_put(parsed_json);   // 释放JSON对象
+        return 1;
+    }
+}
+
+void request_get_map(unsigned int type, unsigned char *data) {
+    CURL *curl;
+    CURLcode res;
+    // 请求api地址
+    char request_get[64] = "http://";
+    strcat(request_get, dataserver);
+    strcat(request_get, "/api/getAidMap.php");
+
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_easy_setopt(curl, CURLOPT_URL, request_get);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback_get_map);
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "User-Agent: Apifox/1.0.0 (https://apifox.com)");
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        char mesg[256];
+       memset(mesg, '\0', 256);
+       if(type == NL_REQUEST_AID) {
+            sprintf(mesg, "{\n"
+            "\t\"ip6\": \"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\"\n}", 
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]);
+       }
+       else {
+            sprintf(mesg, "{\n"
+            "\t\"aid\":\"%02x%02x%02x%02x%02x%02x%02x%02x\"\n}",
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+       }
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, mesg);
+        res = curl_easy_perform(curl);
+    }
+    curl_easy_cleanup(curl);
 }

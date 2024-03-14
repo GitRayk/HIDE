@@ -23,7 +23,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     const TERMINAL_AID_INFO *aid_info = NULL;
 
     // 通过netlink发送给用户空间的信息
-    CHANNEL_MES mesg;
+    UPLOAD_MES mesg;
     s64 start_time = 0, end_time = 0;   // 记录解密的开始时间和结束时间，以计算开销
 
     tinfo = find_terminal_of_mac(eth_header->h_source);
@@ -40,7 +40,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         end_time = ktime_to_ns(ktime_get());
 
         // 解密完成后，通过netlink向用户空间的进程发送消息
-        memset((char*)&mesg, 0, sizeof(CHANNEL_MES));
+        memset((char*)&mesg, 0, sizeof(UPLOAD_MES));
         dev = state->in;
         daddr = ipv6_hdr(skb)->daddr;
         saddr = ipv6_hdr(skb)->saddr;
@@ -65,15 +65,15 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
 
         if (remove_extended_header(skb, plaintext) == -1) {
             strncpy(mesg.states, "bad", 8);
-            strncpy(mesg.notes, "IPC ERROR", 16);
-            channel_send((char*)&mesg, sizeof(CHANNEL_MES));
+            strncpy(mesg.notes, "IPC ERROR", 24);
+            channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
             return NF_DROP;
         }
         else {
             //  remove_extended_header 的返回值为正数 (因为返回值为 -2 的情况在该代码块中不可能发生)
             strncpy(mesg.states, "good", 8);
-            strncpy(mesg.notes, "", 16);
-            channel_send((char*)&mesg, sizeof(CHANNEL_MES));
+            strncpy(mesg.notes, "", 24);
+            channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
         }
         
         // set_ether(skb);
@@ -82,6 +82,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         if(ip_info == NULL) {
             printk(KERN_INFO "Can't find any ipv6 address of AID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X\n",
                     plaintext[0], plaintext[1], plaintext[2], plaintext[3], plaintext[4], plaintext[5], plaintext[6], plaintext[7]);
+            channel_send(NL_REQUEST_IP6, plaintext, 8);
             return NF_DROP;
         }
         printk("数据包源IP[%pI6]对应的真实地址为[%pI6]", &(ipv6_hdr(skb)->saddr), ip_info->ip6);

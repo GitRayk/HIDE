@@ -9,6 +9,7 @@
 #include "extended_header.h"
 #include "kern_aes.h"
 #include "kern_ioctl.h"
+#include "channel.h"
 
 int output_init(void);
 void output_exit(void);

@@ -26,12 +26,16 @@ void channel_exit(void) {
     if(netlink_sock)    netlink_kernel_release(netlink_sock);
 }
 
-void channel_send(char *mesg, unsigned int mesg_len) {
+void channel_send(unsigned int type, char *mesg, unsigned int mesg_len) {
+    CHANNEL_MES data;
+    data.type = type;
+    memcpy((&data.type)+1, mesg, mesg_len);
+
     if(app_pid != 0) {
-    struct sk_buff *skb_out = nlmsg_new(mesg_len, 0);
-    struct nlmsghdr *nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, mesg_len, 0);
+    struct sk_buff *skb_out = nlmsg_new(sizeof(CHANNEL_MES), 0);
+    struct nlmsghdr *nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, sizeof(CHANNEL_MES), 0);
     NETLINK_CB(skb_out).dst_group = 0;
-    memcpy((char*)(nlh + 1), mesg, mesg_len);
+    memcpy((char*)(nlh + 1), &data, sizeof(CHANNEL_MES));
 
     nlmsg_unicast(netlink_sock, skb_out, app_pid);
     }

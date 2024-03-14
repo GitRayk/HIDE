@@ -65,6 +65,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     aid_info = find_terminal_of_ip6((char*)&saddr);
     if(aid_info == NULL) {
         printk("Can't get aid of ipv6: %pI6", &saddr);
+        channel_send(NL_REQUEST_AID, (char *)&saddr, 16);
         return NF_DROP;
     }
     memcpy(AID, aid_info->aid, 8);
