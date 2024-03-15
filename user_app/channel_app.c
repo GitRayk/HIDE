@@ -37,7 +37,7 @@ int option_proc(int argc, char* argv[]);
 int send_to_server(UPLOAD_MES* mes);
 
 // 向注册服务器询问aid是否存在
-int exist_aid(char* aid);
+int exist_aid(unsigned char* aid);
 
 void request_get_map(unsigned int type, unsigned char *data);
 
@@ -245,7 +245,7 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
     return realsize;
 }
 
-int exist_aid(char* aid) {
+int exist_aid(unsigned char* aid) {
     CURL *curl;
     CURLcode res;
 
@@ -255,9 +255,7 @@ int exist_aid(char* aid) {
 
     // 请求api地址
     char request_get[64] = "http://";
-    strcat(request_get, registerserver);
-    strcat(request_get, "/verify?aid=");
-    strcat(request_get, aid);
+    sprintf(request_get, "http://%s:8088/verify?aid=%02x%02x%02x%02x%02x%02x%02x%02x", registerserver, aid[0], aid[1], aid[2], aid[3], aid[4], aid[5], aid[6], aid[7]);
 
     curl = curl_easy_init();
     if(curl) {
@@ -275,7 +273,7 @@ int exist_aid(char* aid) {
             return -1;
         } else {
             parsed_json = json_tokener_parse(curl_res);
-            if (!json_object_object_get_ex(parsed_json, "exist", &json_exist) || strcmp(json_object_get_string(json_exist), "true") != 0) {
+            if (!json_object_object_get_ex(parsed_json, "exists", &json_exist) || strcmp(json_object_get_string(json_exist), "true") != 0) {
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象
                 return 0;

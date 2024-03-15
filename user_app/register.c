@@ -28,7 +28,9 @@ int register_terminal(char *aid);
 // 回调函数，用于接收注册服务器的json数据
 size_t register_callback(void *contents, size_t size, size_t nmemb, void *userp);
 // 将aid-ipv6-sn下发给内核
-void distribute_to_kern(char *ipv6_address, char *aid, unsigned int sn);
+void distribute_to_kern(unsigned char *ipv6_address, unsigned char *aid, unsigned int sn);
+void request_set_map(unsigned char *ipv6_address, unsigned char *aid, unsigned int sn);
+
 
 int main(int argc, char *argv[]) {
     struct ifaddrs *interfaces = NULL;
@@ -36,6 +38,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in6 *ipv6;
     unsigned char *ipv6_address = NULL;
     char aid[8];
+    unsigned int sn;
 
     if(option_proc(argc, argv) != 0) {
         return -1;
@@ -52,9 +55,14 @@ int main(int argc, char *argv[]) {
                 if(!memcmp(ipv6_address, LOCAL_LINK, 5) || !memcmp(ipv6_address, LOOPBACK_LINK, 16))  continue;   
                 
                 // 注册，然后生成一个随机数sn，之后将所有数据下发给内核
-                register_terminal(aid);
-                srand((unsigned int)time(NULL));
-                distribute_to_kern(ipv6_address, aid, rand());
+                if(register_terminal(aid) == 0) {
+                    srand((unsigned int)time(NULL));
+                    sn = rand();
+                    distribute_to_kern(ipv6_address, aid, sn);
+                    request_set_map(ipv6_address, aid, sn);
+                    printf("注册成功\n");
+                }
+                else printf("注册失败\n");
             }
         }
         freeifaddrs(interfaces);
@@ -106,11 +114,12 @@ int register_terminal(char *aid) {
     struct json_object *parsed_json = NULL;
     struct json_object *json_status;
     struct json_object *json_aid;
+    int i;
 
     // 请求api地址
     char request_get[64] = "http://";
     strcat(request_get, registerserver);
-    strcat(request_get, "/generate");
+    strcat(request_get, ":8088/generate");
 
     curl = curl_easy_init();
     if(curl) {
@@ -136,7 +145,7 @@ int register_terminal(char *aid) {
             }
             else {
                 json_object_object_get_ex(parsed_json, "aid", &json_aid);
-                memcpy(aid, json_object_get_string(json_aid), 8);
+                for(i = 0; i < 16; i += 2)  sscanf(json_object_get_string(json_aid) + i, "%2hhx", &aid[i/2]);
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象
                 return 0;
@@ -153,7 +162,7 @@ size_t register_callback(void *contents, size_t size, size_t nmemb, void *userp)
     return realsize;
 }
 
-void distribute_to_kern(char *ipv6_address, char *aid, unsigned int sn) {
+void distribute_to_kern(unsigned char *ipv6_address, unsigned char *aid, unsigned int sn) {
     int fd;
     IOCTL_CMD cmd;
     SET_AID_MES kern_mes;
@@ -173,4 +182,40 @@ void distribute_to_kern(char *ipv6_address, char *aid, unsigned int sn) {
     ioctl(fd, IOCTL_DEV_LABEL, &cmd);
 
     close(fd);
+}
+
+void request_set_map(unsigned char *ipv6_address, unsigned char *aid, unsigned int sn) {
+    CURL *curl;
+    CURLcode res;
+
+    // 请求api地址
+    char request_get[64] = "http://";
+    strcat(request_get, dataserver);
+    strcat(request_get, "/api/setAidMap.php");
+
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_easy_setopt(curl, CURLOPT_URL, request_get);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https");
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "User-Agent: Apifox/1.0.0 (https://apifox.com)");
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        char mesg[256];
+        memset(mesg, '\0', 256);
+        sprintf(mesg, "{\n"
+            "\t\"aid\":\"%02x%02x%02x%02x%02x%02x%02x%02x\",\n"
+            "\t\"ip6\":\"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\",\n"
+            "\t\"sn\": %d\n}",
+            aid[0], aid[1], aid[2], aid[3], aid[4], aid[5], aid[6], aid[7],
+            ipv6_address[0], ipv6_address[1], ipv6_address[2], ipv6_address[3], ipv6_address[4], ipv6_address[5], ipv6_address[6], ipv6_address[7], ipv6_address[8], ipv6_address[9], ipv6_address[10], ipv6_address[11], ipv6_address[12], ipv6_address[13], ipv6_address[14], ipv6_address[15],
+            sn);
+
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, mesg);
+        res = curl_easy_perform(curl);
+    }
+    curl_easy_cleanup(curl);
 }
