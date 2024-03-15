@@ -307,7 +307,7 @@ size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp) 
 
     parsed_json = json_tokener_parse(data);
     if (!json_object_object_get_ex(parsed_json, "result", &json_result) || strcmp(json_object_get_string(json_result), "success") != 0) {
-        printf("error\n");
+        if(strcmp(json_object_get_string(json_result), "null"))     printf("%s\n", json_object_get_string(json_result));
         json_object_put(parsed_json);   // 释放JSON对象
         return 0;
     }
