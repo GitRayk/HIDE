@@ -109,7 +109,7 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     LABEL_HEADER *extended_header = NULL;
     short payload_len;
     char *IPC = NULL;
-    printk("transport_header: %d", skb->transport_header );
+    // printk("transport_header: %d", skb->transport_header );
     skb->transport_header += sizeof(LABEL_HEADER);
     char *header_buff = NULL;
     unsigned int buff_len = 0;

@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
             // 将内核发送来的数据包信息进行处理，然后交付给前端服务器的数据库
             if(u_info.mes.type == NL_UPLOAD_LOG) {
                 if(strcmp(u_info.mes.upload_data.states, "good") == 0 &&  0 == exist_aid(u_info.mes.upload_data.aid)) {
-                    strncpy(u_info.mes.upload_data.states, "bad", 16);
+                    strncpy(u_info.mes.upload_data.states, "bad", 8);
                     strncpy(u_info.mes.upload_data.notes, "AID DOES NOT EXIST", 24);
                 }
                 if(send_to_server(&u_info.mes.upload_data) == -1)
