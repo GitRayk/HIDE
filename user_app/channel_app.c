@@ -30,6 +30,11 @@ typedef struct _user_msg_info
     CHANNEL_MES mes;
 } USER_MSG_INFO;
 
+// Create a list to store the exsiting AIDs
+#define MAX_AID_NUM 128
+static unsigned char aid_list[MAX_AID_NUM][8];
+static unsigned int aid_num = 0;
+
 // 处理程序参数
 int option_proc(int argc, char* argv[]);
 
@@ -122,8 +127,7 @@ int main(int argc, char *argv[])
                     strncpy(u_info.mes.upload_data.states, "bad", 8);
                     strncpy(u_info.mes.upload_data.notes, "AID DOES NOT EXIST", 24);
                 }
-                if(send_to_server(&u_info.mes.upload_data) == -1)
-                    break;
+                send_to_server(&u_info.mes.upload_data);
             }
             else if(u_info.mes.type == NL_REQUEST_AID || u_info.mes.type == NL_REQUEST_IP6) {
                 request_get_map(u_info.mes.type, (unsigned char*)((&u_info.mes.type)+1));
@@ -257,6 +261,13 @@ int exist_aid(unsigned char* aid) {
     char request_get[64] = "http://";
     sprintf(request_get, "http://%s:8088/verify?aid=%02x%02x%02x%02x%02x%02x%02x%02x", registerserver, aid[0], aid[1], aid[2], aid[3], aid[4], aid[5], aid[6], aid[7]);
 
+    // 先从当前缓存的aid列表中确认aid是否存在
+    for(int i = 0; i < aid_num; i++) {// 遍历aid列表
+        if(memcmp(aid_list[i], aid, 8) == 0) {
+            return 1;
+        }
+    }
+
     curl = curl_easy_init();
     if(curl) {
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
@@ -281,6 +292,16 @@ int exist_aid(unsigned char* aid) {
             else {
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象
+
+                // 将aid加入到缓存列表中
+                if(aid_num < MAX_AID_NUM) {
+                    memcpy(aid_list[aid_num], aid, 8);
+                    aid_num++;
+                }
+                else {
+                    // 当aid缓存列表满时，可以设置某种策略进行数据替换，如 LRU 或 LFU 算法
+                    printf("AID cache is full\n");
+                }
                 return 1;
             }
         }
