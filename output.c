@@ -45,6 +45,10 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     const TERMINAL_AID_INFO *aid_info = NULL;
     const TERMINAL_ENCRYPT_INFO *encrypt_info = NULL;
     struct neighbour *neigh = NULL;
+    TERMINAL_ENCRYPT_INFO fake_encrypt_info = {
+        .mac = "\x00\x00\x00\x00\x00\x00",
+        .encrypt_key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+    };
 
     s64 start_time = ktime_to_ns(ktime_get());
 
@@ -76,9 +80,10 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     if (neigh != NULL && (neigh->nud_state == NUD_REACHABLE || neigh->nud_state == NUD_PERMANENT)) {
         encrypt_info = find_terminal_of_mac(neigh->ha);
         if(encrypt_info == NULL) {
-            printk("Can't get encryption info of mac: %pM", neigh->ha);
+            // printk("Can't get encryption info of mac: %pM", neigh->ha);
             // 当找到下一跳之后，发现与下一跳之间没有对称密钥，无法进行加密，则直接按原数据包发送（适应非协作网络）
-            return NF_ACCEPT;
+            // return NF_ACCEPT;
+            encrypt_info = &fake_encrypt_info;
         }
         memcpy(aes_key, encrypt_info->encrypt_key, 16);
     } else {
