@@ -15,6 +15,7 @@
 
 #include "channel_mes.h"
 #include "ioctl_cmd.h"
+#include "pthread_pool.h"
 
 #define MSG_LEN            125
 #define MAX_PLOAD        125
@@ -40,7 +41,7 @@ static unsigned int send_count = 0;
 int option_proc(int argc, char* argv[]);
 
 // 将数据通过api发送到服务器后端
-int send_to_server(UPLOAD_MES* mes);
+void send_to_server(void  *mes);
 
 // 向注册服务器询问aid是否存在
 int exist_aid(unsigned char* aid);
@@ -64,11 +65,16 @@ int main(int argc, char *argv[])
 {
     int ret;
     USER_MSG_INFO u_info;
+    UPLOAD_MES *u_upload_data;
     socklen_t len;
     int skfd;
     struct nlmsghdr *nlh = NULL;
     struct sockaddr_nl saddr, daddr; //saddr 表示源端口地址，daddr表示目的端口地址
     char *umsg = "user app starts";
+    POOL pool;
+
+    // 初始化线程池
+    init_pool(&pool);
 
     // set signal handler for SIGINT
     signal(SIGINT, exit_of_program);
@@ -118,7 +124,7 @@ int main(int argc, char *argv[])
         close(skfd);
         exit(-1);
     }
-
+    
     // 循环监听内核通过 netlink 发送的消息
     while(1) {
         memset(&u_info, 0, sizeof(u_info));
@@ -137,7 +143,11 @@ int main(int argc, char *argv[])
                     strncpy(u_info.mes.upload_data.states, "bad", 8);
                     strncpy(u_info.mes.upload_data.notes, "AID DOES NOT EXIST", 24);
                 }
-                send_to_server(&u_info.mes.upload_data);
+                // send_to_server(&u_info.mes.upload_data);
+                // 为每个任务从堆中分配空间以持久地保存参数，并在任务函数内释放该空间
+                u_upload_data = (UPLOAD_MES*)malloc(sizeof(UPLOAD_MES));
+                memcpy(u_upload_data, &u_info.mes.upload_data, sizeof(UPLOAD_MES));
+                execute_task(&pool, send_to_server, u_upload_data);
             }
             else if(u_info.mes.type == NL_REQUEST_AID || u_info.mes.type == NL_REQUEST_IP6) {
                 request_get_map(u_info.mes.type, (unsigned char*)((&u_info.mes.type)+1));
@@ -200,10 +210,14 @@ size_t upload_callback(void *contents, size_t size, size_t nmemb, void *userp) {
     return realsize;
 }
 
-int send_to_server(UPLOAD_MES* mes) {
+void send_to_server(void  *arg) {
     CURL *curl;
     CURLcode res;
 
+    if(arg == NULL)
+        return;
+
+    UPLOAD_MES *mes = (UPLOAD_MES*)arg;
     // 请求api地址
     char request_post[64] = "http://";
     strcat(request_post, webserver);
@@ -251,10 +265,8 @@ int send_to_server(UPLOAD_MES* mes) {
         send_count++;
 
         curl_easy_cleanup(curl);
-        return 0;
+        free(mes);
     }
-    else
-        return -1;
 }
 
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {

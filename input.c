@@ -43,7 +43,6 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         char_addr = (char*)&(ipv6_hdr(skb)->saddr);
         start_time = ktime_to_ns(ktime_get());
         aes_decrypt(tinfo->encrypt_key, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
-        end_time = ktime_to_ns(ktime_get());
 
         // 解密完成后，通过netlink向用户空间的进程发送消息
         memset((char*)&mesg, 0, sizeof(UPLOAD_MES));
@@ -67,9 +66,10 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         
         memcpy(mesg.label, char_addr, 16);
         memcpy(mesg.aid, plaintext, 8);
-        mesg.delayTime = end_time - start_time;
 
         if (remove_extended_header(skb, plaintext) == -1) {
+            end_time = ktime_to_ns(ktime_get());
+            mesg.delayTime = end_time - start_time;
             strncpy(mesg.states, "bad", 8);
             strncpy(mesg.notes, "IPC ERROR", 24);
             channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
@@ -77,6 +77,8 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         }
         else {
             //  remove_extended_header 的返回值为正数 (因为返回值为 -2 的情况在该代码块中不可能发生)
+            end_time = ktime_to_ns(ktime_get());
+            mesg.delayTime = end_time - start_time;
             strncpy(mesg.states, "good", 8);
             strncpy(mesg.notes, "", 24);
             channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
