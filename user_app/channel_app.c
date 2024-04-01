@@ -34,6 +34,7 @@ typedef struct _user_msg_info
 #define MAX_AID_NUM 128
 static unsigned char aid_list[MAX_AID_NUM][8];
 static unsigned int aid_num = 0;
+static unsigned int send_count = 0;
 
 // 处理程序参数
 int option_proc(int argc, char* argv[]);
@@ -53,6 +54,12 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp);
 // 回调函数，用于处理ipv6地址和aid的映射关系
 size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp);
 
+// process the signal SIGINT
+void exit_of_program(int signo) {
+    printf("Send count: %d\n", send_count);
+    exit(0);
+}
+
 int main(int argc, char *argv[])
 {
     int ret;
@@ -62,6 +69,9 @@ int main(int argc, char *argv[])
     struct nlmsghdr *nlh = NULL;
     struct sockaddr_nl saddr, daddr; //saddr 表示源端口地址，daddr表示目的端口地址
     char *umsg = "user app starts";
+
+    // set signal handler for SIGINT
+    signal(SIGINT, exit_of_program);
 
     if(option_proc(argc, argv) != 0) {
         return -1;
@@ -185,6 +195,11 @@ int option_proc(int argc, char* argv[]) {
     }
 }
 
+size_t upload_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    return realsize;
+}
+
 int send_to_server(UPLOAD_MES* mes) {
     CURL *curl;
     CURLcode res;
@@ -204,6 +219,8 @@ int send_to_server(UPLOAD_MES* mes) {
         headers = curl_slist_append(headers, "User-Agent: Apifox/1.0.0 (https://apifox.com)");
         headers = curl_slist_append(headers, "Content-Type: application/json");
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, upload_callback);     // 如果不设置回调函数，则会在获取到响应之后会输出响应内容，因此这里随意设置一个回调函数
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
         
         // 将消息体构造成json格式的字符串
         char source[24];
@@ -229,11 +246,10 @@ int send_to_server(UPLOAD_MES* mes) {
             "\t\"notes\": \"%s\"\n}", source, mes->states, aid, label, mes->delayTime, mes->notes);
 
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-        res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            printf("Connection to webserver %s failed\n", webserver);
-            return -1;
-        }
+        curl_easy_perform(curl);
+
+        send_count++;
+
         curl_easy_cleanup(curl);
         return 0;
     }
@@ -357,7 +373,6 @@ size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp) 
 
 void request_get_map(unsigned int type, unsigned char *data) {
     CURL *curl;
-    CURLcode res;
     // 请求api地址
     char request_get[64] = "http://";
     strcat(request_get, dataserver);
@@ -388,7 +403,7 @@ void request_get_map(unsigned int type, unsigned char *data) {
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
        }
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, mesg);
-        res = curl_easy_perform(curl);
+        curl_easy_perform(curl);
     }
     curl_easy_cleanup(curl);
 }
