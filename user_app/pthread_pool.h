@@ -1,8 +1,8 @@
 #include <pthread.h>
 
 // 实现线程池，定义最大的线程数量和任务队列长度
-#define MAX_THREAD_NUM 5
-#define TASK_QUEUE_LEN 128
+#define MAX_THREAD_NUM 16            // 实际测试发现核心数 * 2的线程数已经饱和
+#define TASK_QUEUE_LEN 100000
 
 
 // 定义任务结构体，提供完成任务的函数和参数

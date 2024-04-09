@@ -12,6 +12,7 @@
 #include <json-c/json.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <time.h>
 
 #include "channel_mes.h"
 #include "ioctl_cmd.h"
@@ -36,6 +37,10 @@ typedef struct _user_msg_info
 static unsigned char aid_list[MAX_AID_NUM][8];
 static unsigned int aid_num = 0;
 static unsigned int send_count = 0;
+static unsigned int task_count = 0;
+POOL pool;
+
+pthread_mutex_t count_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // 处理程序参数
 int option_proc(int argc, char* argv[]);
@@ -57,7 +62,9 @@ size_t callback_get_map(void *contents, size_t size, size_t nmemb, void *userp);
 
 // process the signal SIGINT
 void exit_of_program(int signo) {
+    printf("Task count: %d\n", task_count);
     printf("Send count: %d\n", send_count);
+    printf("Remain task: %d\n", (pool.task_queue_tail + TASK_QUEUE_LEN - pool.task_queue_head) % TASK_QUEUE_LEN);
     exit(0);
 }
 
@@ -71,7 +78,7 @@ int main(int argc, char *argv[])
     struct nlmsghdr *nlh = NULL;
     struct sockaddr_nl saddr, daddr; //saddr 表示源端口地址，daddr表示目的端口地址
     char *umsg = "user app starts";
-    POOL pool;
+    // POOL pool;
 
     // 初始化线程池
     init_pool(&pool);
@@ -139,15 +146,12 @@ int main(int argc, char *argv[])
         else {
             // 将内核发送来的数据包信息进行处理，然后交付给前端服务器的数据库
             if(u_info.mes.type == NL_UPLOAD_LOG) {
-                if(strcmp(u_info.mes.upload_data.states, "good") == 0 &&  0 == exist_aid(u_info.mes.upload_data.aid)) {
-                    strncpy(u_info.mes.upload_data.states, "bad", 8);
-                    strncpy(u_info.mes.upload_data.notes, "AID DOES NOT EXIST", 24);
-                }
                 // send_to_server(&u_info.mes.upload_data);
                 // 为每个任务从堆中分配空间以持久地保存参数，并在任务函数内释放该空间
                 u_upload_data = (UPLOAD_MES*)malloc(sizeof(UPLOAD_MES));
                 memcpy(u_upload_data, &u_info.mes.upload_data, sizeof(UPLOAD_MES));
                 execute_task(&pool, send_to_server, u_upload_data);
+                task_count++;
             }
             else if(u_info.mes.type == NL_REQUEST_AID || u_info.mes.type == NL_REQUEST_IP6) {
                 request_get_map(u_info.mes.type, (unsigned char*)((&u_info.mes.type)+1));
@@ -218,6 +222,11 @@ void send_to_server(void  *arg) {
         return;
 
     UPLOAD_MES *mes = (UPLOAD_MES*)arg;
+
+    if(strcmp(mes->states, "good") == 0 &&  1 != exist_aid(mes->aid)) {
+        strncpy(mes->states, "bad", 8);
+        strncpy(mes->notes, "AID DOES NOT EXIST", 24);
+    }
     // 请求api地址
     char request_post[64] = "http://";
     strcat(request_post, webserver);
@@ -262,7 +271,9 @@ void send_to_server(void  *arg) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
         curl_easy_perform(curl);
 
+        pthread_mutex_lock(&count_mutex);
         send_count++;
+        pthread_mutex_unlock(&count_mutex);
 
         curl_easy_cleanup(curl);
         free(mes);
@@ -286,7 +297,7 @@ int exist_aid(unsigned char* aid) {
     struct json_object *json_exist;
 
     // 请求api地址
-    char request_get[64] = "http://";
+    char request_get[128] = "http://";
     sprintf(request_get, "http://%s:8088/verify?aid=%02x%02x%02x%02x%02x%02x%02x%02x", registerserver, aid[0], aid[1], aid[2], aid[3], aid[4], aid[5], aid[6], aid[7]);
 
     // 先从当前缓存的aid列表中确认aid是否存在
@@ -309,18 +320,19 @@ int exist_aid(unsigned char* aid) {
         res = curl_easy_perform(curl);  
 
         if(res != CURLE_OK) {
+            printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
             return -1;
         } else {
             parsed_json = json_tokener_parse(curl_res);
             if (!json_object_object_get_ex(parsed_json, "exists", &json_exist) || strcmp(json_object_get_string(json_exist), "true") != 0) {
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象
-                return 0;
+                                return 0;
             }
             else {
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象
-
+                
                 // 将aid加入到缓存列表中
                 if(aid_num < MAX_AID_NUM) {
                     memcpy(aid_list[aid_num], aid, 8);
