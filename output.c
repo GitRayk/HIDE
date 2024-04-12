@@ -1,10 +1,5 @@
 #include "output.h"
-
-static void set_ether(struct sk_buff *skb) {
-    unsigned char hw[6];
-    memset(hw, 0xFF, 6);
-    eth_header(skb, skb->dev, ETH_P_IPV6, hw, NULL, 0);
-}
+#include "debug_util.h"
 
 static int csum_calculate(struct sk_buff *skb) {
     struct ipv6hdr *ipv6_header = NULL;
@@ -49,8 +44,8 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
         .mac = "\x00\x00\x00\x00\x00\x00",
         .encrypt_key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
     };
-
-    s64 start_time = ktime_to_ns(ktime_get());
+    s64 start_time, end_time;
+    start_time = ktime_to_ns(ktime_get());
 
     // 如果这个数据包是邻居请求数据||邻居通告就不进行任何处理
     if(ipv6_hdr(skb)->nexthdr == IPPROTO_ICMPV6 && (icmp6_hdr(skb)->icmp6_type == 135 || icmp6_hdr(skb)->icmp6_type == 136)) {
@@ -101,6 +96,8 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);
 
+    DEBUG_PRINT("生成地址标签: %pI6\n", char_addr);
+
     // 由于修改了源地址，所以需要重新计算上层校验和（现在由于每一跳都恢复了IP地址，所以不需要重新计算传输层校验和
     //if(csum_calculate(skb) == -1)
     //    return NF_DROP;
@@ -114,7 +111,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     // dev_queue_xmit(skb);
 
     // return NF_STOLEN;
-    s64 end_time = ktime_to_ns(ktime_get());
+    end_time = ktime_to_ns(ktime_get());
     printk("hook_output function total time: %lld ns", end_time - start_time);
     return NF_ACCEPT;
 }

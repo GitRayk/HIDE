@@ -1,4 +1,5 @@
 #include "extended_header.h"
+#include "debug_util.h"
 
 void debug_print_packet(const struct sk_buff *skb) {
     unsigned char *byte = skb->data;
@@ -110,9 +111,10 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
     short payload_len;
     char *IPC = NULL;
     // printk("transport_header: %d", skb->transport_header );
-    skb->transport_header += sizeof(LABEL_HEADER);
     char *header_buff = NULL;
     unsigned int buff_len = 0;
+
+    skb->transport_header += sizeof(LABEL_HEADER);
 
     // 验证 IPC
     IPC = kmalloc(get_digest_size(), GFP_KERNEL);
@@ -125,6 +127,7 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
             kfree(IPC);
             return -1;
         }
+        DEBUG_PRINT("IPC 验证通过\n");
         kfree(IPC);
     }
     else {

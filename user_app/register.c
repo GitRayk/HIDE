@@ -16,6 +16,13 @@
 #define LOCAL_LINK "\xfe\x80\x00\x00\x00"
 #define LOOPBACK_LINK "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
 
+#define DEBUG_ENABLE 1
+#if DEBUG_ENABLE
+#define DEBUG_PRINT(fmt, args...) printf(fmt, ##args)
+#else
+#define DEBUG_PRINT(fmt, args...)
+#endif
+
 static char registerserver[64];
 static char dataserver[64];
 // 用于保存返回内容的字符串
@@ -55,6 +62,7 @@ int main(int argc, char *argv[]) {
                 if(!memcmp(ipv6_address, LOCAL_LINK, 5) || !memcmp(ipv6_address, LOOPBACK_LINK, 16))  continue;   
                 
                 // 注册，然后生成一个随机数sn，之后将所有数据下发给内核
+                DEBUG_PRINT("注册信息：\nipv6_address: %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n", ipv6_address[0], ipv6_address[1], ipv6_address[2], ipv6_address[3], ipv6_address[4], ipv6_address[5], ipv6_address[6], ipv6_address[7], ipv6_address[8], ipv6_address[9], ipv6_address[10], ipv6_address[11], ipv6_address[12], ipv6_address[13], ipv6_address[14], ipv6_address[15]);
                 if(register_terminal(aid) == 0) {
                     srand((unsigned int)time(NULL));
                     sn = rand();
@@ -114,6 +122,8 @@ int register_terminal(char *aid) {
     struct json_object *parsed_json = NULL;
     struct json_object *json_status;
     struct json_object *json_aid;
+    struct json_object *json_did;
+    struct json_object *json_publickey;
     int i;
 
     // 请求api地址
@@ -145,6 +155,13 @@ int register_terminal(char *aid) {
             }
             else {
                 json_object_object_get_ex(parsed_json, "aid", &json_aid);
+                json_object_object_get_ex(parsed_json, "did", &json_did);
+                json_object_object_get_ex(parsed_json, "publickey", &json_publickey);
+
+                DEBUG_PRINT("aid: %s\n", json_object_get_string(json_aid));
+                DEBUG_PRINT("did: %s\n", json_object_get_string(json_did));
+                DEBUG_PRINT("publickey: %s\n", json_object_get_string(json_publickey));
+
                 for(i = 0; i < 16; i += 2)  sscanf(json_object_get_string(json_aid) + i, "%2hhx", &aid[i/2]);
                 curl_easy_cleanup(curl);
                 json_object_put(parsed_json);   // 释放JSON对象

@@ -21,15 +21,16 @@ void aes_exit(void) {
 int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes_key, char* target) {
     char plaintext[ENCRYPT_SIZE] = {0};
     char decrypt_text[ENCRYPT_SIZE] = {0};
+    s64 start_time, copy_time, setkey_time, encrypt_time, decrypt_time;
 
-    s64 start_time = ktime_to_ns(ktime_get());
+    start_time = ktime_to_ns(ktime_get());
     
     // 拼接 AID、TS、SN
     memcpy(plaintext, aid, 8);
     memcpy(plaintext + 8,  ts, 4);
     memcpy(plaintext + 12, sn, 4);
 
-    s64 copy_time = ktime_to_ns(ktime_get());
+    copy_time = ktime_to_ns(ktime_get());
 
     // 加载加解密时所需要使用的密钥
     if(crypto_cipher_setkey(tfm, aes_key, ENCRYPT_SIZE)) {
@@ -38,16 +39,17 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
         return -1;
     }
 
-    s64 setkey_time = ktime_to_ns(ktime_get());
+    setkey_time = ktime_to_ns(ktime_get());
 
     // 对明文进行加密，加密结果保存在指定地址
     crypto_cipher_encrypt_one(tfm, target, plaintext);
 
-    s64 encrypt_time = ktime_to_ns(ktime_get());
+    encrypt_time = ktime_to_ns(ktime_get());
 
     // 测试解密过程的时间
+    /*
     crypto_cipher_decrypt_one(tfm, decrypt_text, target);
-    s64 decrypt_time = ktime_to_ns(ktime_get());
+    decrypt_time = ktime_to_ns(ktime_get());
     if(strncmp(plaintext, decrypt_text, ENCRYPT_SIZE) != 0)
         printk("Decrypt error");
 
@@ -56,6 +58,7 @@ int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes
     printk("setkey_time: %lld ns", setkey_time - copy_time);
     printk("encrypt_time: %lld ns", encrypt_time - setkey_time);
     printk("decrypt_time: %lld ns", decrypt_time - encrypt_time);
+    */
 
     return 0;
 }
