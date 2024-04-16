@@ -224,9 +224,12 @@ void send_to_server(void  *arg) {
     UPLOAD_MES *mes = (UPLOAD_MES*)arg;
 
     if(strcmp(mes->states, "good") == 0 &&  1 != exist_aid(mes->aid)) {
+        printf("AID 不存在\n");
         strncpy(mes->states, "bad", 8);
         strncpy(mes->notes, "AID DOES NOT EXIST", 24);
     }
+    else
+        printf("AID 存在\n");
     // 请求api地址
     char request_post[64] = "http://";
     strcat(request_post, webserver);

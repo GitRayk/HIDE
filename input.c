@@ -54,7 +54,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
             memset(mesg.source, 0, 8);
         } 
         else {
-            aid_info = find_terminal_of_ip6((char*)&net_device_ip);
+            aid_info = find_terminal_of_ip6((char*)&net_device_ip);     // 获取当前网卡的自身的 aid
             if(aid_info == NULL) {
                 printk("Can't get aid of ipv6: %pI6", &net_device_ip);
                 memset(mesg.source, 0, 8);
