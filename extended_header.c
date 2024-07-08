@@ -127,7 +127,7 @@ int remove_extended_header(struct sk_buff *skb, const char *AID) {
             kfree(IPC);
             return -1;
         }
-        DEBUG_PRINT("IPC 验证通过\n");
+        // DEBUG_PRINT("IPC 验证通过\n");
         kfree(IPC);
     }
     else {

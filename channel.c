@@ -1,4 +1,5 @@
 #include "channel.h"
+#include "hash_table.h"
 
 struct sock *netlink_sock;
 static unsigned int app_pid;
@@ -39,4 +40,36 @@ void channel_send(unsigned int type, char *mesg, unsigned int mesg_len) {
 
     nlmsg_unicast(netlink_sock, skb_out, app_pid);
     }
+}
+
+void set_upload_mes(UPLOAD_MES *mesg, struct sk_buff *skb, const struct nf_hook_state *state, unsigned char *aid, unsigned int delayTime, const char *states, const char *notes) {
+    struct net_device *dev;
+    struct in6_addr net_device_ip, saddr, daddr;
+    const TERMINAL_AID_INFO *aid_info = NULL;
+    char *char_addr = (char*)&(ipv6_hdr(skb)->saddr);
+
+    memset((char*)mesg, 0, sizeof(UPLOAD_MES));
+    dev = state->in;
+    daddr = ipv6_hdr(skb)->daddr;
+    saddr = ipv6_hdr(skb)->saddr;
+    if (ipv6_dev_get_saddr(&init_net, dev, &daddr, 0, &net_device_ip) != 0) {
+        printk("Can't find net device [%s]ipv6 to %pI6", dev->name, &daddr);
+        memset(mesg->source, 0, 8);
+    } 
+    else {
+        aid_info = find_terminal_of_ip6((char*)&net_device_ip);     // 获取当前网卡的自身的 aid
+        if(aid_info == NULL) {
+            printk("Can't get aid of ipv6: %pI6", &net_device_ip);
+            memset(mesg->source, 0, 8);
+        }
+        else {
+            memcpy(mesg->source, aid_info->aid, 8);
+        }
+    }
+
+    memcpy(mesg->label, char_addr, 16);
+    memcpy(mesg->aid, aid, 8);
+    strncpy(mesg->states, states, 8);
+    strncpy(mesg->notes, notes, 24);
+    mesg->delayTime = delayTime;
 }

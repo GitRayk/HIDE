@@ -21,52 +21,39 @@ void aes_exit(void) {
 int aes_encrypt(const char* aid, const char *ts, const char *sn, const char* aes_key, char* target) {
     char plaintext[ENCRYPT_SIZE] = {0};
     char decrypt_text[ENCRYPT_SIZE] = {0};
-    s64 start_time, copy_time, setkey_time, encrypt_time, decrypt_time;
-
-    start_time = ktime_to_ns(ktime_get());
+    s64 t1 = ktime_to_ns(ktime_get());
     
     // 拼接 AID、TS、SN
     memcpy(plaintext, aid, 8);
     memcpy(plaintext + 8,  ts, 4);
     memcpy(plaintext + 12, sn, 4);
 
-    copy_time = ktime_to_ns(ktime_get());
+    printk("加密[数据复制时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
 
     // 加载加解密时所需要使用的密钥
     if(crypto_cipher_setkey(tfm, aes_key, ENCRYPT_SIZE)) {
         printk(KERN_ERR "Failed to set AES key\n");
         crypto_free_cipher(tfm);
         return -1;
-    }
+    }  
 
-    setkey_time = ktime_to_ns(ktime_get());
+    printk("加密[设置加密密钥时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
 
     // 对明文进行加密，加密结果保存在指定地址
     crypto_cipher_encrypt_one(tfm, target, plaintext);
 
-    encrypt_time = ktime_to_ns(ktime_get());
-
-    // 测试解密过程的时间
-    /*
-    crypto_cipher_decrypt_one(tfm, decrypt_text, target);
-    decrypt_time = ktime_to_ns(ktime_get());
-    if(strncmp(plaintext, decrypt_text, ENCRYPT_SIZE) != 0)
-        printk("Decrypt error");
-
-    printk("//////////////// debug:");
-    printk("copy_time: %lld ns", copy_time - start_time);
-    printk("setkey_time: %lld ns", setkey_time - copy_time);
-    printk("encrypt_time: %lld ns", encrypt_time - setkey_time);
-    printk("decrypt_time: %lld ns", decrypt_time - encrypt_time);
-    */
+    printk("加密[加密时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
 
     return 0;
 }
 
 int aes_decrypt(const char *aes_key, const char *IID, const char *EEA, char *target) {
+    s64 t1 = ktime_to_ns(ktime_get());
     char decrypt_text[ENCRYPT_SIZE] = {0};
     memcpy(decrypt_text, IID, 8);
     memcpy(decrypt_text + 8, EEA, 8);
+
+    printk("解密[数据复制时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
 
     // 加载加解密时所需要使用的密钥
     if(crypto_cipher_setkey(tfm, aes_key, ENCRYPT_SIZE)) {
@@ -75,6 +62,10 @@ int aes_decrypt(const char *aes_key, const char *IID, const char *EEA, char *tar
         return -1;
     }
 
+    printk("解密[设置解密密钥时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
+
     crypto_cipher_decrypt_one(tfm, target, decrypt_text);
+
+    printk("解密[解密时间]: %lld\n", ktime_to_ns(ktime_get()) - t1);
     return 0;
 }

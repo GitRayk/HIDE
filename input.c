@@ -18,9 +18,6 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     const TERMINAL_IP_INFO *ip_info = NULL;
     char *char_addr = NULL;
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
-    struct net_device *dev;
-    struct in6_addr net_device_ip, saddr, daddr;
-    const TERMINAL_AID_INFO *aid_info = NULL;
     TERMINAL_ENCRYPT_INFO fake_encrypt_info = {
         .mac = "\x00\x00\x00\x00\x00\x00",
         .encrypt_key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
@@ -44,43 +41,17 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         start_time = ktime_to_ns(ktime_get());
         aes_decrypt(tinfo->encrypt_key, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
 
-        // 解密完成后，通过netlink向用户空间的进程发送消息
-        memset((char*)&mesg, 0, sizeof(UPLOAD_MES));
-        dev = state->in;
-        daddr = ipv6_hdr(skb)->daddr;
-        saddr = ipv6_hdr(skb)->saddr;
-        if (ipv6_dev_get_saddr(&init_net, dev, &daddr, 0, &net_device_ip) != 0) {
-            printk("Can't find net device [%s]ipv6 to %pI6", dev->name, &daddr);
-            memset(mesg.source, 0, 8);
-        } 
-        else {
-            aid_info = find_terminal_of_ip6((char*)&net_device_ip);     // 获取当前网卡的自身的 aid
-            if(aid_info == NULL) {
-                printk("Can't get aid of ipv6: %pI6", &net_device_ip);
-                memset(mesg.source, 0, 8);
-            }
-            else {
-                memcpy(mesg.source, aid_info->aid, 8);
-            }
-        }
-        
-        memcpy(mesg.label, char_addr, 16);
-        memcpy(mesg.aid, plaintext, 8);
-
         if (remove_extended_header(skb, plaintext) == -1) {
             end_time = ktime_to_ns(ktime_get());
-            mesg.delayTime = end_time - start_time;
-            strncpy(mesg.states, "bad", 8);
-            strncpy(mesg.notes, "IPC ERROR", 24);
+            set_upload_mes(&mesg, skb, state, plaintext, end_time - start_time, "bad", "IPC ERROR");
             channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
+            
             return NF_DROP;
         }
         else {
             //  remove_extended_header 的返回值为正数 (因为返回值为 -2 的情况在该代码块中不可能发生)
             end_time = ktime_to_ns(ktime_get());
-            mesg.delayTime = end_time - start_time;
-            strncpy(mesg.states, "good", 8);
-            strncpy(mesg.notes, "", 24);
+            set_upload_mes(&mesg, skb, state, plaintext, end_time - start_time, "good", "");
             channel_send(NL_UPLOAD_LOG, (char*)&mesg, sizeof(UPLOAD_MES));
         }
         
@@ -93,7 +64,7 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
             channel_send(NL_REQUEST_IP6, plaintext, 8);
             return NF_DROP;
         }
-        printk("数据包源IP[%pI6]对应的真实地址为[%pI6]", &(ipv6_hdr(skb)->saddr), ip_info->ip6);
+        //printk("数据包源IP[%pI6]对应的真实地址为[%pI6]", &(ipv6_hdr(skb)->saddr), ip_info->ip6);
         memcpy(&(ipv6_hdr(skb)->saddr), ip_info->ip6, 16);
 
         return NF_ACCEPT;

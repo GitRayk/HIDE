@@ -96,7 +96,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);
 
-    DEBUG_PRINT("生成地址标签: %pI6\n", char_addr);
+    // DEBUG_PRINT("生成地址标签: %pI6\n", char_addr);
 
     // 由于修改了源地址，所以需要重新计算上层校验和（现在由于每一跳都恢复了IP地址，所以不需要重新计算传输层校验和
     //if(csum_calculate(skb) == -1)
@@ -111,8 +111,8 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     // dev_queue_xmit(skb);
 
     // return NF_STOLEN;
-    end_time = ktime_to_ns(ktime_get());
-    printk("hook_output function total time: %lld ns", end_time - start_time);
+    // end_time = ktime_to_ns(ktime_get());
+    // printk("hook_output function total time: %lld ns", end_time - start_time);
     return NF_ACCEPT;
 }
 
