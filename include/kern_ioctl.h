@@ -1,5 +1,6 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
+#include <linux/crypto.h>
 
 #include "ioctl_cmd.h"
 #include "hash_table.h"

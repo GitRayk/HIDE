@@ -34,16 +34,12 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
     char encrypt_addr[ENCRYPT_SIZE] = {0};
     char AID[8];
     unsigned int sn, time_stamp;
-    char aes_key[16];
     struct in6_addr net_device_ip, saddr, daddr;
     struct net_device *dev;
     const TERMINAL_AID_INFO *aid_info = NULL;
     const TERMINAL_ENCRYPT_INFO *encrypt_info = NULL;
     struct neighbour *neigh = NULL;
-    TERMINAL_ENCRYPT_INFO fake_encrypt_info = {
-        .mac = "\x00\x00\x00\x00\x00\x00",
-        .encrypt_key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
-    };
+
     s64 start_time, end_time;
     start_time = ktime_to_ns(ktime_get());
 
@@ -78,9 +74,8 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
             // printk("Can't get encryption info of mac: %pM", neigh->ha);
             // 当找到下一跳之后，发现与下一跳之间没有对称密钥，无法进行加密，则直接按原数据包发送（适应非协作网络）
             // return NF_ACCEPT;
-            encrypt_info = &fake_encrypt_info;
+            encrypt_info = get_fake_terminal_encrypt_info();
         }
-        memcpy(aes_key, encrypt_info->encrypt_key, 16);
     } else {
         // 当发现当前邻居表中没有这项或表项失效的时候，没法将数据加密（因为不知道使用哪个对称密钥）
         // 所以必须让这个数据包直接到达数据链路层，然后数据链路层就会发送邻居请求
@@ -91,7 +86,7 @@ unsigned int hook_output(void *priv, struct sk_buff *skb, const struct nf_hook_s
 
     // 获取 IID || EEA
     time_stamp = (unsigned int)ktime_get();
-    aes_encrypt(AID, (char*)&time_stamp, (char*)&sn, aes_key, encrypt_addr);
+    aes_encrypt(AID, (char*)&time_stamp, (char*)&sn, encrypt_info->tfm, encrypt_addr);
      // 修改 IPv6 源地址，必须得在添加扩展报头之前修改，因为扩展报头中的 IPC 依赖修改后的 IP 地址
     char_addr = (char*)&(ipv6_hdr(skb)->saddr);
     memcpy(char_addr + 8, encrypt_addr, 8);

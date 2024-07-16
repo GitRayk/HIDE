@@ -81,6 +81,7 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
     IOCTL_CMD iocmd;
     SET_KEY_MES buff;
     SET_AID_MES buff_aid;
+    struct crypto_cipher *tfm = NULL;
     memset(&iocmd, 0, sizeof(IOCTL_CMD));
 
     //获取用户空间的命令参数，并根据命令做具体的操作
@@ -88,10 +89,18 @@ long get_unlocked_ioctl (struct file *filep, unsigned int cmd, unsigned long arg
 
     if(iocmd.type == IOCTL_SET_AES_KEY) {
         copy_from_user((char*)&buff, (char*)iocmd.buff, sizeof(SET_KEY_MES));
-        if(find_terminal_of_mac(buff.mac) == NULL)
-            insert_terminal_encrypt_info(buff.mac, buff.aes_key);
+        tfm = crypto_alloc_cipher("aes", 0, 0);
+        if(IS_ERR(tfm)) {
+            printk(KERN_ERR "Failed to load AES cipher\n");
+            return PTR_ERR(tfm);
+        }
+        crypto_cipher_setkey(tfm, buff.aes_key, 16);
+
+        if(find_terminal_of_mac(buff.mac) == NULL) {
+            insert_terminal_encrypt_info(buff.mac, tfm);
+        }
         else
-            update_terminal_encrypt_info(buff.mac, buff.aes_key);
+            update_terminal_encrypt_info(buff.mac, tfm);
     }
     else if(iocmd.type == IOCTL_SET_AID) {
         copy_from_user((char*)&buff_aid, (char*)iocmd.buff, sizeof(SET_AID_MES));

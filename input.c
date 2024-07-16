@@ -18,11 +18,6 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
     const TERMINAL_IP_INFO *ip_info = NULL;
     char *char_addr = NULL;
     char plaintext[ENCRYPT_SIZE];   // 保存解密数据，即 AID || TS || SN
-    TERMINAL_ENCRYPT_INFO fake_encrypt_info = {
-        .mac = "\x00\x00\x00\x00\x00\x00",
-        .encrypt_key = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
-    };
-
     // 通过netlink发送给用户空间的信息
     UPLOAD_MES mesg;
     s64 start_time = 0, end_time = 0;   // 记录解密的开始时间和结束时间，以计算开销
@@ -32,14 +27,14 @@ unsigned int hook_input(void *priv, struct sk_buff *skb, const struct nf_hook_st
         // printk(KERN_INFO "Can't find any aes key of Source MAC Address: %pM\n", eth_header->h_source);
         // return NF_ACCEPT;     // 如果查不到对应的密钥，直接接受该数据包
         // 在该分支中，不提前设置对称密钥，而是让所有的终端都是用同样的密钥
-        tinfo = &fake_encrypt_info;
+        tinfo = get_fake_terminal_encrypt_info();
     }
 
     label_hdr = skb_label_header(skb);
     if(label_hdr != NULL) {
         char_addr = (char*)&(ipv6_hdr(skb)->saddr);
         start_time = ktime_to_ns(ktime_get());
-        aes_decrypt(tinfo->encrypt_key, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
+        aes_decrypt(tinfo->tfm, char_addr + 8, label_hdr->eea, plaintext);  // 解密后前 8 个字节是 AID
 
         if (remove_extended_header(skb, plaintext) == -1) {
             end_time = ktime_to_ns(ktime_get());

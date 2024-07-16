@@ -1,18 +1,19 @@
 #include <linux/slab.h>
 #include <linux/hashtable.h>
 #include <linux/jhash.h>
+#include <linux/crypto.h>
 
 #ifndef __HASH_TABLE__
 #define __HASH_TABLE__
 #define HASHTABLE_SIZE 10
 
-// 由 MAC 地址映射到加密密钥
+// 由 MAC 地址映射到加密所使用的上下文结构
 typedef struct __terminal__encrypt_info {
     union {
         char key[6];
         char mac[6];
     };
-    char encrypt_key[16];
+    struct crypto_cipher *tfm;
     // 是否需要时间戳用来表示密钥过期？
 
     struct hlist_node hnode;
@@ -43,16 +44,20 @@ typedef struct __terminal_aid_info {
 } TERMINAL_AID_INFO;
 #endif
 
+void hashtable_init(void);
+void hashtable_exit(void);
+TERMINAL_ENCRYPT_INFO  *get_fake_terminal_encrypt_info(void);
+
 // 将 mac 和 加密密钥 的映射关系存储到哈希表中。成功时返回 0，否则返回负值
-int insert_terminal_encrypt_info(const char *mac, const char *encrypt_key);   
+int insert_terminal_encrypt_info(const char *mac, const struct crypto_cipher *tfm);   
 
 // 更新哈希表中指定 mac 的加密密钥
-int update_terminal_encrypt_info(const char *mac, const char *encrypt_key);
+int update_terminal_encrypt_info(const char *mac, const struct crypto_cipher *tfm);
 
 // 删除哈希表中指定 mac 的表项
 int delete_terminal_encrypt_info(const char *mac);
 
-// 根据指定的 mac 地址返回对应的加密密钥
+// 根据指定的 mac 地址返回对应的加密信息结构体指针
 const TERMINAL_ENCRYPT_INFO *find_terminal_of_mac(const char *mac);  
 
 // 清空哈希表中所有信息

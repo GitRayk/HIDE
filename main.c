@@ -8,6 +8,7 @@
 #include "kern_ioctl.h"
 #include "channel.h"
 #include "tcp_set_mss.h"
+#include "hash_table.h"
 
 
 static int __init my_module_init(void) {
@@ -19,6 +20,7 @@ static int __init my_module_init(void) {
     ioctl_init();
     channel_init();
     tcp_set_mss_init();
+    hashtable_init();
 
     pr_info("Extended module loaded\n");
     return 0;
@@ -33,6 +35,7 @@ static void __exit my_module_exit(void) {
     ioctl_exit();
     channel_exit();
     tcp_set_mss_exit();
+    hashtable_exit();
 
     pr_info("Extended module unloaded\n");
 }
